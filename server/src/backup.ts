@@ -31,27 +31,49 @@ export function exportBackup(db: Db, dataDir: string, now: Date): BackupV1 {
 }
 
 export function importBackup(db: Db, dataDir: string, b: BackupV1): void {
-  db.transaction(() => {
-    for (const t of ['lab_state', 'step_progress', 'journals', 'attachments', 'activity']) db.exec(`DELETE FROM ${t}`);
-    const insState = db.prepare('INSERT INTO lab_state (slug,status,started_at,completed_at,updated_at) VALUES (?,?,?,?,?)');
-    b.labState.forEach((r) => insState.run(r.slug, r.status, r.startedAt, r.completedAt, r.updatedAt));
-    const insStep = db.prepare('INSERT INTO step_progress (slug,step_index,text_hash,checked,checked_at) VALUES (?,?,?,?,?)');
-    b.stepProgress.forEach((r) => insStep.run(r.slug, r.stepIndex, r.textHash, r.checked ? 1 : 0, r.checkedAt));
-    const insJ = db.prepare('INSERT INTO journals (slug,body_md,time_taken_min,difficulty,confidence,updated_at) VALUES (?,?,?,?,?,?)');
-    b.journals.forEach((r) => insJ.run(r.slug, r.bodyMd, r.timeTakenMin, r.difficulty, r.confidence, r.updatedAt));
-    const insA = db.prepare('INSERT INTO attachments (id,slug,file_name,mime,bytes,created_at) VALUES (?,?,?,?,?,?)');
-    b.attachments.forEach((r) => insA.run(r.id, r.slug, r.fileName, r.mime, r.bytes, r.createdAt));
-    const insAct = db.prepare('INSERT INTO activity (day,slug,kind,at) VALUES (?,?,?,?)');
-    b.activity.forEach((r) => insAct.run(r.day, r.slug, r.kind, r.at));
-  })();
-
   const root = path.join(dataDir, 'attachments');
-  fs.rmSync(root, { recursive: true, force: true });
-  for (const a of b.attachments) {
-    const dir = path.join(root, a.slug);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, a.fileName), Buffer.from(a.dataBase64, 'base64'));
+  const staging = path.join(dataDir, 'attachments.restore-new');
+  const previous = path.join(dataDir, 'attachments.restore-old');
+
+  fs.rmSync(staging, { recursive: true, force: true });
+  fs.rmSync(previous, { recursive: true, force: true });
+  fs.mkdirSync(dataDir, { recursive: true });
+
+  try {
+    for (const a of b.attachments) {
+      const dir = path.join(staging, a.slug);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, a.fileName), Buffer.from(a.dataBase64, 'base64'));
+    }
+    fs.mkdirSync(staging, { recursive: true });
+
+    db.transaction(() => {
+      for (const t of ['lab_state', 'step_progress', 'journals', 'attachments', 'activity']) db.exec(`DELETE FROM ${t}`);
+      const insState = db.prepare('INSERT INTO lab_state (slug,status,started_at,completed_at,updated_at) VALUES (?,?,?,?,?)');
+      b.labState.forEach((r) => insState.run(r.slug, r.status, r.startedAt, r.completedAt, r.updatedAt));
+      const insStep = db.prepare('INSERT INTO step_progress (slug,step_index,text_hash,checked,checked_at) VALUES (?,?,?,?,?)');
+      b.stepProgress.forEach((r) => insStep.run(r.slug, r.stepIndex, r.textHash, r.checked ? 1 : 0, r.checkedAt));
+      const insJ = db.prepare('INSERT INTO journals (slug,body_md,time_taken_min,difficulty,confidence,updated_at) VALUES (?,?,?,?,?,?)');
+      b.journals.forEach((r) => insJ.run(r.slug, r.bodyMd, r.timeTakenMin, r.difficulty, r.confidence, r.updatedAt));
+      const insA = db.prepare('INSERT INTO attachments (id,slug,file_name,mime,bytes,created_at) VALUES (?,?,?,?,?,?)');
+      b.attachments.forEach((r) => insA.run(r.id, r.slug, r.fileName, r.mime, r.bytes, r.createdAt));
+      const insAct = db.prepare('INSERT INTO activity (day,slug,kind,at) VALUES (?,?,?,?)');
+      b.activity.forEach((r) => insAct.run(r.day, r.slug, r.kind, r.at));
+
+      const hadRoot = fs.existsSync(root);
+      if (hadRoot) fs.renameSync(root, previous);
+      try {
+        fs.renameSync(staging, root);
+      } catch (err) {
+        if (hadRoot) fs.renameSync(previous, root);
+        throw err;
+      }
+    })();
+  } catch (err) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    throw err;
   }
+  fs.rmSync(previous, { recursive: true, force: true });
 }
 
 export function backupToMarkdown(db: Db): string {

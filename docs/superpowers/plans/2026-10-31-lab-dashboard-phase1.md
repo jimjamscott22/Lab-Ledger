@@ -4632,3 +4632,12 @@ Push the branch and open or update the PR. In the PR description list any deviat
 **Type consistency:** `ProgressRow` is defined in `stepMatch.ts` (Task 5) and used in `repo.ts` (Task 6) and `scan.ts` (Task 7). `AppContext` is defined in Task 9 and used by every route registrar and `makeTestApp`. `LabEventPayload` is defined in shared (Task 2) and used by `LabEvents`, `service.ts`, and the client `events.ts`. Route registrar names (`registerLabRoutes`, `registerProgressRoutes`, `registerJournalRoutes`, `registerAttachmentRoutes`, `registerStatsRoutes`, `registerBackupRoutes`) match between Tasks 9 and 10. `api.toggleStep` returns `{checked, status, allChecked}`, matching the server route in Task 9.
 
 **Known risks the executor should expect:** dependency majors are pinned to versions the code was written against. If `npm install` resolves something different or fails, fix the pin. Don't rewrite code to chase a newer major. None of this plan's code has been executed yet; Tasks 4, 7, 10, and 16 are where I expect small corrections.
+
+---
+
+## Post-review amendments
+
+Codex review of the PR found two issues in the code blocks above. They are fixed in the implementation, and the code in Tasks 10 and 15 above is superseded by it:
+
+- **Task 10 `importBackup`:** now stages the restored attachments in `attachments.restore-new`, and only then runs the DB transaction. Inside the transaction it swaps the directories (`attachments` to `attachments.restore-old`, staging to `attachments`), and it rolls the swap back if that fails. A staging failure (for example a full disk) leaves the old database and old screenshots untouched. `backup.test.ts` has a failure-path test that injects a write error.
+- **Task 15 `JournalEditor`:** the unmount-only flush could not cover a reload, tab close or full-page navigation. The editor now also flushes on `pagehide` and on `visibilitychange` to hidden, using a `keepalive` fetch (`api.saveJournalOnLeave`). `tests/e2e/02-viewer.spec.ts` has a test that edits and leaves the page immediately.

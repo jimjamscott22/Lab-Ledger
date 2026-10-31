@@ -50,12 +50,23 @@ export function JournalEditor({ slug, initial, textareaRef }: Props) {
     return () => clearTimeout(t);
   }, [fields]);
 
-  useEffect(
-    () => () => {
-      if (dirty.current) void api.saveJournal(slug, latest.current);
-    },
-    [slug],
-  );
+  useEffect(() => {
+    const flush = () => {
+      if (!dirty.current) return;
+      dirty.current = false;
+      api.saveJournalOnLeave(slug, latest.current);
+    };
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHide);
+      flush();
+    };
+  }, [slug]);
 
   const insert = (text: string) => {
     const ta = textareaRef.current;

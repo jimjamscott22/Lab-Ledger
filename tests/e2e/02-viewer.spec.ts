@@ -65,6 +65,16 @@ test('journal autosaves and a pasted screenshot renders after reload', async ({ 
   expect((await page.request.get(src!)).status()).toBe(200);
 });
 
+test('a pending journal edit is saved when the page is left immediately', async ({ page }) => {
+  await page.goto('/labs/linux-file-permissions');
+  await page.getByRole('tab', { name: 'Journal' }).click();
+  await page.getByLabel('Journal (Markdown)').fill('typed then left at once');
+  await page.goto('/settings');
+  await expect
+    .poll(async () => (await (await page.request.get('/api/labs/linux-file-permissions/journal')).json()).bodyMd)
+    .toBe('typed then left at once');
+});
+
 test('completing every step offers to mark the lab completed', async ({ page }) => {
   await page.goto('/labs/ad-user-onboarding');
   const boxes = page.locator('ol[aria-label="Steps"] input[type="checkbox"]');

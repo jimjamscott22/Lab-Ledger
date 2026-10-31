@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { makeTestApp } from './testing-app';
 import { openDb } from './db/open';
 import { exportBackup, importBackup, backupToMarkdown } from './backup';
@@ -29,6 +29,39 @@ describe('backup', () => {
     const files = fs.readdirSync(path.join(freshDir, 'attachments', 'ad-user-onboarding'));
     expect(files).toHaveLength(1);
     expect(fs.readFileSync(path.join(freshDir, 'attachments', 'ad-user-onboarding', files[0])).equals(PNG)).toBe(true);
+  });
+
+  it('keeps the old database and attachments when staging a restore fails', async () => {
+    const { app, ctx, dataDir } = await makeTestApp();
+    await app.inject({ method: 'PUT', url: '/api/labs/ad-user-onboarding/journal', payload: { bodyMd: 'original', timeTakenMin: 1, difficulty: 1, confidence: 1 } });
+    const boundary = 'b';
+    const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`), PNG, Buffer.from(`\r\n--${boundary}--\r\n`)]);
+    await app.inject({ method: 'POST', url: '/api/labs/ad-user-onboarding/attachments', payload: body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
+    const before = exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'));
+    const keptFiles = fs.readdirSync(path.join(dataDir, 'attachments', 'ad-user-onboarding'));
+
+    const replacement = { ...before, journals: [{ ...before.journals[0], bodyMd: 'replacement' }],
+      attachments: [
+        { ...before.attachments[0], id: '11111111-1111-1111-1111-111111111111', fileName: '11111111-1111-1111-1111-111111111111.png' },
+        { ...before.attachments[0], id: '22222222-2222-2222-2222-222222222222', fileName: '22222222-2222-2222-2222-222222222222.png' },
+      ] };
+
+    const realWrite = fs.writeFileSync;
+    let calls = 0;
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation(((...args: Parameters<typeof fs.writeFileSync>) => {
+      if (++calls === 2) throw new Error('ENOSPC: no space left on device');
+      return realWrite(...args);
+    }) as typeof fs.writeFileSync);
+    try {
+      expect(() => importBackup(ctx.db, dataDir, replacement)).toThrow(/ENOSPC/);
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'))).toEqual(before);
+    expect(fs.readdirSync(path.join(dataDir, 'attachments', 'ad-user-onboarding'))).toEqual(keptFiles);
+    expect(fs.existsSync(path.join(dataDir, 'attachments.restore-new'))).toBe(false);
+    expect(fs.existsSync(path.join(dataDir, 'attachments.restore-old'))).toBe(false);
   });
 
   it('restore via the HTTP API validates input', async () => {

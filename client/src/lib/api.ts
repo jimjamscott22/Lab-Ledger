@@ -19,6 +19,18 @@ export const api = {
   toggleStep: (slug: string, index: number, checked: boolean) =>
     request<{ checked: number[]; status: LabStatus; allChecked: boolean }>(`/labs/${slug}/steps`, { method: 'PUT', json: { index, checked } }),
   saveJournal: (slug: string, j: Omit<Journal, 'updatedAt'>) => request<Journal>(`/labs/${slug}/journal`, { method: 'PUT', json: j }),
+  saveJournalOnLeave: (slug: string, j: Omit<Journal, 'updatedAt'>): void => {
+    try {
+      void fetch(`/api/labs/${slug}/journal`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(j),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      // keepalive bodies are capped (~64 KB); an oversized note falls back to the debounced save
+    }
+  },
   uploadAttachment: (slug: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
