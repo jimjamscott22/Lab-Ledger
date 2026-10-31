@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LAB_STATUSES, type LabStatus } from '@lab-ledger/shared';
+import { JournalEditor } from '../components/JournalEditor';
 import { LabFrame } from '../components/LabFrame';
 import { StepList } from '../components/StepList';
 import { api } from '../lib/api';
@@ -205,16 +206,17 @@ export default function LabViewer() {
             id={`panel-${tab}`}
             aria-labelledby={`tab-${tab}`}
           >
-            {tab === 'steps' ? (
+            <div hidden={tab !== 'steps'}>
               <StepList
                 steps={lab.steps}
                 checked={checked}
                 focusIndex={focusStep}
                 onToggle={(i, v) => void toggle(i, v)}
               />
-            ) : (
-              <p>Journal editor loads here (Task 15).</p>
-            )}
+            </div>
+            <div hidden={tab !== 'journal'}>
+              <JournalEditor key={slug} slug={slug} initial={data.journal} textareaRef={journalRef} />
+            </div>
           </div>
         </section>
       </div>
