@@ -3642,7 +3642,7 @@ export default function LabList() {
         <select value={filter} onChange={(e) => setFilter(e.target.value as LabStatus | 'all')}>
           <option value="all">All</option>
           {LAB_STATUSES.map((s) => (
-            <option key={s} value={s}>{LABS[s]}</option>
+            <option key={s} value={s}>{LABELS[s]}</option>
           ))}
         </select>
       </label>
@@ -3659,7 +3659,7 @@ export default function LabList() {
             </span>
             <span>
               <span className="label">{l.date}</span>
-              <span className={`chip ${l.status}`}>{LABS[l.status]}</span>
+              <span className={`chip ${l.status}`}>{LABELS[l.status]}</span>
               <span className="label"> {l.stepsChecked}/{l.stepsTotal}</span>
             </span>
           </li>

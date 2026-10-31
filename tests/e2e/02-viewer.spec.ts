@@ -27,6 +27,7 @@ test('arrow keys navigate and the ends disable their buttons', async ({ page }) 
   await expect(page.getByRole('button', { name: 'Previous lab' })).toBeDisabled();
   await page.keyboard.press('ArrowRight');
   await expect(page).toHaveURL(/\/labs\/gpo-drive-mapping$/);
+  await expect(page.getByRole('heading', { name: /GPO Drive Mapping/ })).toBeVisible();
   await page.keyboard.press('ArrowLeft');
   await expect(page).toHaveURL(/\/labs\/ad-user-onboarding$/);
 
