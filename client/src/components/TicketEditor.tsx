@@ -57,8 +57,20 @@ export function TicketEditor({ slug }: { slug: string }) {
   }, [fields]);
 
   useEffect(() => {
+    const flush = () => {
+      if (!dirty.current || !latest.current) return;
+      dirty.current = false;
+      api.saveTicketOnLeave(slug, latest.current);
+    };
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHide);
     return () => {
-      if (dirty.current && latest.current) api.saveTicketOnLeave(slug, latest.current);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHide);
+      flush();
     };
   }, [slug]);
 

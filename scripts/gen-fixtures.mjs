@@ -4,7 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixturesRoot = path.join(repoRoot, 'tests/fixtures');
-const labsDirs = [path.join(repoRoot, 'labs'), path.join(fixturesRoot, 'labs')];
+const includeCanonical = process.argv.includes('--canonical');
+const labsDirs = [
+  ...(includeCanonical ? [path.join(repoRoot, 'labs')] : []),
+  path.join(fixturesRoot, 'labs'),
+];
 const badDir = path.join(fixturesRoot, 'malformed');
 fs.rmSync(fixturesRoot, { recursive: true, force: true });
 for (const labsDir of labsDirs) {
