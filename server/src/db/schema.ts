@@ -35,3 +35,16 @@ CREATE TABLE IF NOT EXISTS tickets (
   updated_at TEXT
 );
 `;
+
+export const SCHEMA_V3 = `
+CREATE TABLE IF NOT EXISTS question_reviews (
+  slug TEXT NOT NULL,
+  q_index INTEGER NOT NULL,
+  box INTEGER NOT NULL DEFAULT 1 CHECK(box BETWEEN 1 AND 5),
+  last_rating TEXT NOT NULL,
+  last_reviewed TEXT NOT NULL,
+  due_date TEXT NOT NULL,
+  PRIMARY KEY (slug, q_index)
+);
+CREATE INDEX IF NOT EXISTS question_reviews_due ON question_reviews(due_date);
+`;

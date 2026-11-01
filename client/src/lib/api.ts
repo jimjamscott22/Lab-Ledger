@@ -1,5 +1,6 @@
 import type {
   Journal,
+  DueQuestion,
   LabDetail,
   LabState,
   LabStatus,
@@ -7,6 +8,8 @@ import type {
   Stats,
   Ticket,
   TicketFields,
+  QuestionRating,
+  QuestionReview,
 } from '@lab-ledger/shared';
 
 async function request<T>(path: string, init: { method?: string; json?: unknown; form?: FormData } = {}): Promise<T> {
@@ -55,6 +58,13 @@ export const api = {
       // The debounced save remains the primary persistence path.
     }
   },
+  dueQuestions: (topic?: string) =>
+    request<DueQuestion[]>(`/questions/due${topic ? `?topic=${encodeURIComponent(topic)}` : ''}`),
+  reviewQuestion: (slug: string, questionIndex: number, rating: QuestionRating) =>
+    request<QuestionReview>(`/questions/${slug}/${questionIndex}/review`, {
+      method: 'POST',
+      json: { rating },
+    }),
   uploadAttachment: (slug: string, file: File) => {
     const form = new FormData();
     form.append('file', file);

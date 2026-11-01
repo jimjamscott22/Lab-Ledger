@@ -22,6 +22,7 @@ export default function Home() {
         <StatCard label="Current streak" value={`${data.currentStreak} d`} hint={`Best ${data.longestStreak} d`} />
         <StatCard label="Time logged" value={hours(data.totalMinutes)} />
         <StatCard label="Avg difficulty" value={data.avgDifficulty === null ? '–' : `${data.avgDifficulty} / 5`} />
+        <StatCard label="Questions due" value={String(data.questionsDue)} />
       </div>
 
       <section className="card" aria-labelledby="today-h">
@@ -34,6 +35,14 @@ export default function Home() {
         ) : (
           <p>No labs yet.</p>
         )}
+      </section>
+
+      <section className="card" aria-labelledby="practice-h">
+        <h2 id="practice-h">Interview practice</h2>
+        <p>
+          {data.questionsDue} question{data.questionsDue === 1 ? '' : 's'} due today.{' '}
+          <Link to="/practice">Practice now</Link>
+        </p>
       </section>
 
       <h2>Topic coverage</h2>

@@ -2,6 +2,7 @@ import { TOPICS, type Stats } from '@lab-ledger/shared';
 import type { Db } from './db/open';
 import * as repo from './db/repo';
 import { dayInTz } from './lib/time';
+import { listDueQuestions } from './questions';
 
 function addDays(day: string, n: number): string {
   const d = new Date(`${day}T00:00:00Z`);
@@ -64,6 +65,7 @@ export function buildStats(db: Db, now: Date, tz: string): Stats {
     longestStreak: streaks.longest,
     totalMinutes: agg.minutes,
     avgDifficulty: agg.diff === null ? null : Math.round(agg.diff * 10) / 10,
+    questionsDue: listDueQuestions(db, today).length,
     topicCoverage,
     today: todayLab,
     recentJournals: recent.map((r) => ({ slug: r.slug, title: r.title, snippet: r.body_md.trim().slice(0, 160), updatedAt: r.updated_at })),

@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from '@playwright/test';
 
-const PAGES = ['/', '/labs', '/labs/ad-user-onboarding', '/settings'];
+const PAGES = ['/', '/labs', '/labs/ad-user-onboarding', '/practice', '/settings'];
 
 for (const scheme of ['light', 'dark'] as const) {
   for (const url of PAGES) {

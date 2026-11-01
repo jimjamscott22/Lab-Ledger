@@ -29,6 +29,29 @@ export function exportBackup(db: Db, dataDir: string, now: Date): BackupV1 {
     updatedAt: r.updated_at,
   }));
 
+  const questionReviews = (
+    db
+      .prepare(
+        `SELECT slug, q_index, box, last_rating, last_reviewed, due_date
+         FROM question_reviews ORDER BY slug, q_index`,
+      )
+      .all() as {
+      slug: string;
+      q_index: number;
+      box: number;
+      last_rating: BackupV1['questionReviews'][number]['lastRating'];
+      last_reviewed: string;
+      due_date: string;
+    }[]
+  ).map((r) => ({
+    slug: r.slug,
+    questionIndex: r.q_index,
+    box: r.box,
+    lastRating: r.last_rating,
+    lastReviewed: r.last_reviewed,
+    dueDate: r.due_date,
+  }));
+
   const attachments = (db.prepare('SELECT id, slug, file_name, mime, bytes, created_at FROM attachments ORDER BY id').all() as
     { id: string; slug: string; file_name: string; mime: string; bytes: number; created_at: string }[])
     .map((r) => {
@@ -46,6 +69,7 @@ export function exportBackup(db: Db, dataDir: string, now: Date): BackupV1 {
     stepProgress,
     journals,
     tickets,
+    questionReviews,
     attachments,
     activity,
   };
@@ -69,7 +93,15 @@ export function importBackup(db: Db, dataDir: string, b: BackupV1): void {
     fs.mkdirSync(staging, { recursive: true });
 
     db.transaction(() => {
-      for (const t of ['lab_state', 'step_progress', 'journals', 'tickets', 'attachments', 'activity']) {
+      for (const t of [
+        'lab_state',
+        'step_progress',
+        'journals',
+        'tickets',
+        'question_reviews',
+        'attachments',
+        'activity',
+      ]) {
         db.exec(`DELETE FROM ${t}`);
       }
       const insState = db.prepare('INSERT INTO lab_state (slug,status,started_at,completed_at,updated_at) VALUES (?,?,?,?,?)');
@@ -80,6 +112,20 @@ export function importBackup(db: Db, dataDir: string, b: BackupV1): void {
       b.journals.forEach((r) => insJ.run(r.slug, r.bodyMd, r.timeTakenMin, r.difficulty, r.confidence, r.updatedAt));
       const insTicket = db.prepare('INSERT INTO tickets (slug,fields_json,updated_at) VALUES (?,?,?)');
       b.tickets.forEach((r) => insTicket.run(r.slug, JSON.stringify(r.fields), r.updatedAt));
+      const insReview = db.prepare(
+        `INSERT INTO question_reviews
+           (slug,q_index,box,last_rating,last_reviewed,due_date) VALUES (?,?,?,?,?,?)`,
+      );
+      b.questionReviews.forEach((r) =>
+        insReview.run(
+          r.slug,
+          r.questionIndex,
+          r.box,
+          r.lastRating,
+          r.lastReviewed,
+          r.dueDate,
+        ),
+      );
       const insA = db.prepare('INSERT INTO attachments (id,slug,file_name,mime,bytes,created_at) VALUES (?,?,?,?,?,?)');
       b.attachments.forEach((r) => insA.run(r.id, r.slug, r.fileName, r.mime, r.bytes, r.createdAt));
       const insAct = db.prepare('INSERT INTO activity (day,slug,kind,at) VALUES (?,?,?,?)');
