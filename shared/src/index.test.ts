@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { StatusBody, StepToggleBody, JournalBody, TOPICS, BackupSchema } from './index';
+import { StatusBody, StepToggleBody, JournalBody, TicketBody, TOPICS, BackupSchema } from './index';
 
 describe('shared schemas', () => {
   it('has the 12 rotation topics', () => {
@@ -20,9 +20,24 @@ describe('shared schemas', () => {
     expect(() => JournalBody.parse({ ...base, confidence: 0 })).toThrow();
     expect(JournalBody.parse({ ...base, difficulty: 5, confidence: 1 })).toBeTruthy();
   });
+  it('requires every ticket field to be a bounded string', () => {
+    const fields = {
+      ticketNumber: '',
+      requester: '',
+      issue: '',
+      impact: '',
+      troubleshootingSteps: '',
+      rootCause: '',
+      resolution: '',
+      timeToResolve: '',
+      followUp: '',
+    };
+    expect(TicketBody.parse(fields)).toEqual(fields);
+    expect(() => TicketBody.parse({ ...fields, issue: 42 })).toThrow();
+  });
   it('rejects unsafe slugs and ids in a backup', () => {
     const empty = { version: 1, exportedAt: 'x', labState: [], stepProgress: [], journals: [], attachments: [], activity: [] };
-    expect(BackupSchema.parse(empty)).toBeTruthy();
+    expect(BackupSchema.parse(empty).tickets).toEqual([]);
     const bad = { ...empty, attachments: [{ id: '../x', slug: 'a', fileName: 'a.png', mime: 'image/png', bytes: 1, createdAt: 'x', dataBase64: '' }] };
     expect(() => BackupSchema.parse(bad)).toThrow();
   });

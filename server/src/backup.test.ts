@@ -14,12 +14,28 @@ describe('backup', () => {
     await app.inject({ method: 'PUT', url: '/api/labs/ad-user-onboarding/steps', payload: { index: 0, checked: true } });
     await app.inject({ method: 'PUT', url: '/api/labs/ad-user-onboarding/status', payload: { status: 'completed' } });
     await app.inject({ method: 'PUT', url: '/api/labs/ad-user-onboarding/journal', payload: { bodyMd: 'notes ![x](/api/attachments/1)', timeTakenMin: 10, difficulty: 2, confidence: 5 } });
+    await app.inject({
+      method: 'PUT',
+      url: '/api/labs/ad-user-onboarding/ticket',
+      payload: {
+        ticketNumber: 'INC-1',
+        requester: 'Jamie',
+        issue: 'Account needed',
+        impact: 'New hire blocked',
+        troubleshootingSteps: 'Checked request',
+        rootCause: 'No account',
+        resolution: 'Created account',
+        timeToResolve: '20 minutes',
+        followUp: 'Confirm login',
+      },
+    });
     const boundary = 'b';
     const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`), PNG, Buffer.from(`\r\n--${boundary}--\r\n`)]);
     await app.inject({ method: 'POST', url: '/api/labs/ad-user-onboarding/attachments', payload: body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
 
     const original = exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'));
     expect(original.attachments).toHaveLength(1);
+    expect(original.tickets).toHaveLength(1);
 
     const freshDb = openDb(':memory:');
     const freshDir = fs.mkdtempSync(path.join(os.tmpdir(), 'restore-'));

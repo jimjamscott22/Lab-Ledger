@@ -57,6 +57,11 @@ button.primary { background: var(--accent); color: var(--accent-fg); border-colo
 .journal textarea { width: 100%; min-height: 220px; resize: vertical; font-family: ui-monospace, monospace; }
 .journal-preview { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
 .journal-preview img { max-width: 100%; }
+.ticket-editor { display: grid; gap: 10px; }
+.ticket-editor label { display: grid; gap: 4px; font-size: 0.9rem; font-weight: 600; }
+.ticket-editor textarea { width: 100%; min-height: 90px; resize: vertical; font-family: inherit; font-weight: 400; }
+.ticket-editor input { width: 100%; font-weight: 400; }
+.ticket-actions { margin: 0; text-align: right; }
 .banner { background: var(--card); border: 1px solid var(--ok); border-radius: 8px; padding: 8px 12px; margin: 8px 0; display: flex; gap: 12px; align-items: center; }
 .toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 10; }
 .toast { background: var(--card); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; }

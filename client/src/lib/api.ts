@@ -1,4 +1,13 @@
-import type { Journal, LabDetail, LabState, LabStatus, LabSummary, Stats } from '@lab-ledger/shared';
+import type {
+  Journal,
+  LabDetail,
+  LabState,
+  LabStatus,
+  LabSummary,
+  Stats,
+  Ticket,
+  TicketFields,
+} from '@lab-ledger/shared';
 
 async function request<T>(path: string, init: { method?: string; json?: unknown; form?: FormData } = {}): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -29,6 +38,21 @@ export const api = {
       }).catch(() => {});
     } catch {
       // keepalive bodies are capped (~64 KB); an oversized note falls back to the debounced save
+    }
+  },
+  ticket: (slug: string) => request<Ticket>(`/labs/${slug}/ticket`),
+  saveTicket: (slug: string, fields: TicketFields) =>
+    request<Ticket>(`/labs/${slug}/ticket`, { method: 'PUT', json: fields }),
+  saveTicketOnLeave: (slug: string, fields: TicketFields): void => {
+    try {
+      void fetch(`/api/labs/${slug}/ticket`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      // The debounced save remains the primary persistence path.
     }
   },
   uploadAttachment: (slug: string, file: File) => {
