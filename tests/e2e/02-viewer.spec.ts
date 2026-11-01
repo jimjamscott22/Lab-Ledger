@@ -75,6 +75,47 @@ test('a pending journal edit is saved when the page is left immediately', async 
     .toBe('typed then left at once');
 });
 
+test('ticket write-up is prefilled, autosaves, and exports as Markdown', async ({ page }) => {
+  await page.goto('/labs/windows-wont-wake-from-sleep');
+  await page.getByRole('tab', { name: 'Ticket' }).click();
+  await expect(page.getByRole('textbox', { name: 'Issue', exact: true })).toHaveValue(
+    /User reports a problem/,
+  );
+  await expect(
+    page.getByRole('textbox', { name: 'Troubleshooting steps', exact: true }),
+  ).toHaveValue(/Root cause/);
+
+  await page.getByRole('textbox', { name: 'Ticket #', exact: true }).fill('INC-1042');
+  await page
+    .getByRole('textbox', { name: 'Root cause', exact: true })
+    .fill('USB power management disabled wake.');
+  await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible({ timeout: 5000 });
+
+  await page.reload();
+  await page.getByRole('tab', { name: 'Ticket' }).click();
+  await expect(page.getByRole('textbox', { name: 'Ticket #', exact: true })).toHaveValue(
+    'INC-1042',
+  );
+  const markdown = await page.request.get(
+    '/api/labs/windows-wont-wake-from-sleep/ticket/markdown',
+  );
+  expect(markdown.status()).toBe(200);
+  expect(await markdown.text()).toContain('USB power management disabled wake.');
+});
+
+test('a pending ticket edit is saved when the page reloads or leaves immediately', async ({
+  page,
+}) => {
+  await page.goto('/labs/ad-user-onboarding');
+  await page.getByRole('tab', { name: 'Ticket' }).click();
+  await page.getByRole('textbox', { name: 'Ticket #', exact: true }).fill('INC-9001');
+  await page.reload();
+  await page.getByRole('tab', { name: 'Ticket' }).click();
+  await expect(page.getByRole('textbox', { name: 'Ticket #', exact: true })).toHaveValue(
+    'INC-9001',
+  );
+});
+
 test('completing every step offers to mark the lab completed', async ({ page }) => {
   await page.goto('/labs/ad-user-onboarding');
   const boxes = page.locator('ol[aria-label="Steps"] input[type="checkbox"]');

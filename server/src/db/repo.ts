@@ -1,4 +1,4 @@
-import type { Journal, Lab, LabState, LabStatus, LabSummary } from '@lab-ledger/shared';
+import type { Journal, Lab, LabState, LabStatus, LabSummary, Ticket, TicketFields } from '@lab-ledger/shared';
 import type { Db } from './open';
 import type { ProgressRow } from '../ingest/stepMatch';
 
@@ -151,6 +151,23 @@ export function putJournal(db: Db, slug: string, j: Omit<Journal, 'updatedAt'>, 
        difficulty=excluded.difficulty, confidence=excluded.confidence, updated_at=excluded.updated_at`,
   ).run(slug, j.bodyMd, j.timeTakenMin, j.difficulty, j.confidence, nowIso);
   return getJournal(db, slug)!;
+}
+
+export function getTicket(db: Db, slug: string): Ticket | null {
+  const row = db.prepare('SELECT fields_json, updated_at FROM tickets WHERE slug=?').get(slug) as
+    | { fields_json: string; updated_at: string | null }
+    | undefined;
+  return row
+    ? { fields: JSON.parse(row.fields_json) as TicketFields, updatedAt: row.updated_at }
+    : null;
+}
+
+export function putTicket(db: Db, slug: string, fields: TicketFields, nowIso: string): Ticket {
+  db.prepare(
+    `INSERT INTO tickets (slug, fields_json, updated_at) VALUES (?,?,?)
+     ON CONFLICT(slug) DO UPDATE SET fields_json=excluded.fields_json, updated_at=excluded.updated_at`,
+  ).run(slug, JSON.stringify(fields), nowIso);
+  return getTicket(db, slug)!;
 }
 
 export interface AttachmentRow {

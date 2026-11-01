@@ -27,3 +27,11 @@ CREATE TABLE IF NOT EXISTS activity (
 );
 CREATE INDEX IF NOT EXISTS activity_day ON activity(day);
 `;
+
+export const SCHEMA_V2 = `
+CREATE TABLE IF NOT EXISTS tickets (
+  slug TEXT PRIMARY KEY,
+  fields_json TEXT NOT NULL,
+  updated_at TEXT
+);
+`;

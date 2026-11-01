@@ -76,6 +76,23 @@ export interface Journal {
   updatedAt: string | null;
 }
 
+export interface TicketFields {
+  ticketNumber: string;
+  requester: string;
+  issue: string;
+  impact: string;
+  troubleshootingSteps: string;
+  rootCause: string;
+  resolution: string;
+  timeToResolve: string;
+  followUp: string;
+}
+
+export interface Ticket {
+  fields: TicketFields;
+  updatedAt: string | null;
+}
+
 export interface LabSummary {
   slug: string;
   date: string;
@@ -134,6 +151,17 @@ export const JournalBody = z.object({
   difficulty: z.number().int().min(1).max(5).nullable(),
   confidence: z.number().int().min(1).max(5).nullable(),
 });
+export const TicketBody = z.object({
+  ticketNumber: z.string().max(500),
+  requester: z.string().max(2_000),
+  issue: z.string().max(20_000),
+  impact: z.string().max(20_000),
+  troubleshootingSteps: z.string().max(100_000),
+  rootCause: z.string().max(20_000),
+  resolution: z.string().max(100_000),
+  timeToResolve: z.string().max(2_000),
+  followUp: z.string().max(20_000),
+});
 
 const Slug = z.string().regex(/^[a-z0-9-]+$/);
 const Uuid = z.string().regex(/^[0-9a-f-]{36}$/);
@@ -170,6 +198,15 @@ export const BackupSchema = z.object({
       updatedAt: z.string().nullable(),
     }),
   ),
+  tickets: z
+    .array(
+      z.object({
+        slug: Slug,
+        fields: TicketBody,
+        updatedAt: z.string().nullable(),
+      }),
+    )
+    .default([]),
   attachments: z.array(
     z.object({
       id: Uuid,

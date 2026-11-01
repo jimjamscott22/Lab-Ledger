@@ -4,6 +4,7 @@ import { LAB_STATUSES, type LabStatus } from '@lab-ledger/shared';
 import { JournalEditor } from '../components/JournalEditor';
 import { LabFrame } from '../components/LabFrame';
 import { StepList } from '../components/StepList';
+import { TicketEditor } from '../components/TicketEditor';
 import { api } from '../lib/api';
 import { isTyping, useHotkeys } from '../lib/hotkeys';
 import { useAsync } from '../lib/useAsync';
@@ -22,7 +23,7 @@ export default function LabViewer() {
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [status, setStatus] = useState<LabStatus>('not_started');
   const [focusStep, setFocusStep] = useState(0);
-  const [tab, setTab] = useState<'steps' | 'journal'>('steps');
+  const [tab, setTab] = useState<'steps' | 'journal' | 'ticket'>('steps');
   const [allChecked, setAllChecked] = useState(false);
   const journalRef = useRef<HTMLTextAreaElement>(null);
 
@@ -199,6 +200,16 @@ export default function LabViewer() {
             >
               Journal
             </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-ticket"
+              aria-selected={tab === 'ticket'}
+              aria-controls="panel-ticket"
+              onClick={() => setTab('ticket')}
+            >
+              Ticket
+            </button>
           </div>
           <div
             className="panel-body"
@@ -216,6 +227,9 @@ export default function LabViewer() {
             </div>
             <div hidden={tab !== 'journal'}>
               <JournalEditor key={slug} slug={slug} initial={data.journal} textareaRef={journalRef} />
+            </div>
+            <div hidden={tab !== 'ticket'}>
+              <TicketEditor key={slug} slug={slug} />
             </div>
           </div>
         </section>

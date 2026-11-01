@@ -1,10 +1,10 @@
 # Lab-Ledger (Lab Dashboard)
 
-A personal, local-first web app for browsing the daily IT labs in `/workspace/labs` and recording what I did in each one. I'm a recent Information Science grad aiming for entry-level IT Support, Help Desk, or junior sysadmin roles. The app turns the labs into a practice log, an interview-prep tool, and a portfolio.
+A personal, local-first web app for browsing the daily IT labs committed in `labs/` and recording what I did in each one. I'm a recent Information Science grad aiming for entry-level IT Support, Help Desk, or junior sysadmin roles. The app turns the labs into a practice log, an interview-prep tool, and a portfolio.
 
 Everything runs on your own machine. There is no account, no cloud service, and no network call at runtime. Your progress and notes live in a single SQLite file that is easy to back up.
 
-> **Status:** Phase 1 (MVP) is implemented and tested. Phase 2 and 3 features are listed under [Roadmap](#roadmap) and are not built yet.
+> **Status:** Phase 1 (MVP) is complete. Phase 2 is underway; ticket write-ups are implemented.
 
 ---
 
@@ -48,11 +48,10 @@ You need **Node.js 22 or newer** and **npm 10 or newer**.
 git clone https://github.com/jimjamscott22/Lab-Ledger.git
 cd Lab-Ledger
 npm install
-npm run fixtures                       # only if you have no real labs yet
-LABS_DIR=./tests/fixtures/labs npm run dev
+npm run dev
 ```
 
-Then open <http://localhost:5173>. If you have real labs, set `LABS_DIR` to that folder instead (or leave it unset to use the default `/workspace/labs`).
+Then open <http://localhost:5173>. The committed `labs/` directory is used by default.
 
 ## Installation and setup
 
@@ -75,7 +74,7 @@ This installs all three workspaces (`shared`, `server`, `client`) in one step.
 
 ### 3. Prepare your labs folder
 
-The app reads lab files from `LABS_DIR` (default `/workspace/labs`). It expects:
+The app reads lab files from `LABS_DIR` (default `./labs`). The repository's `labs/` directory is the canonical home for lab content. It expects:
 
 - Files named `YYYY-MM-DD-<slug>.html`, for example `2026-10-29-windows-wont-wake-from-sleep.html`.
 - Optionally, a `lab-log.txt` index in the same folder, one lab per line:
@@ -87,13 +86,11 @@ The app reads lab files from `LABS_DIR` (default `/workspace/labs`). It expects:
 
 The lab files are treated as **read-only**. The app never modifies, renames, or deletes them.
 
-**No labs yet?** Generate sample labs that match the real structure (seven labs with 9/12/12/15/13/14/42 steps, plus a `lab-log.txt`):
+To regenerate the isolated test-fixture labs in `tests/fixtures/labs` (pass `-- --canonical` only if you intentionally want to reset `labs/` to the seven sample labs):
 
 ```bash
 npm run fixtures
 ```
-
-They are written to `tests/fixtures/labs`. Point `LABS_DIR` there to try the app.
 
 ### 4. Configure (optional)
 
@@ -136,7 +133,7 @@ All settings are environment variables.
 
 | Variable | Default | Description |
 |---|---|---|
-| `LABS_DIR` | `/workspace/labs` | Folder containing the lab HTML files and `lab-log.txt` (read-only) |
+| `LABS_DIR` | `./labs` | Folder containing the lab HTML files and `lab-log.txt` (read-only at runtime) |
 | `DATA_DIR` | `./data` | Where user data lives: `app.db` (SQLite) and `attachments/` (screenshots) |
 | `PORT` | `4317` | API port. In production this also serves the client |
 | `HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` only behind a private network |
@@ -152,7 +149,7 @@ Fixed behavior (not configurable): streaks and "today" use the `America/New_York
 |---|---|---|
 | Home | `/` | Stat cards, today's lab, 12-topic coverage grid, recent notes |
 | Labs | `/labs` | All labs, newest first, with status chips, step counts, and a status filter |
-| Viewer | `/labs/:slug` | The lab, plus a side panel with **Steps** and **Journal** tabs |
+| Viewer | `/labs/:slug` | The lab, plus **Steps**, **Journal**, and **Ticket** tabs |
 | Settings | `/settings` | Backup download, Markdown export, restore, manual rescan |
 
 On screens narrower than 768 px the side panel stacks under the lab.
@@ -177,6 +174,14 @@ Key presses inside the lab itself are forwarded, so the shortcuts work wherever 
 - Paste an image (or drag one onto the editor) to attach it. The editor inserts `![screenshot](/api/attachments/<id>)` at your cursor.
 - Allowed images: PNG, JPEG, WebP, up to 10 MB. Files are checked by their actual bytes, not just the extension.
 - A live preview renders below the editor.
+
+### Ticket write-ups
+
+The Ticket tab records the ticket number, requester, issue, impact, troubleshooting steps, root cause, resolution, time to resolve, and follow-up. New write-ups are prefilled from the lab's scenario and ticket template when available, autosave after 800 ms, and can be downloaded as Markdown. Ticket data is included in JSON backups.
+
+<video src="./docs/assets/lab-ledger-ticket-editor-walkthrough.mp4" controls width="100%"></video>
+
+[Watch the ticket editor walkthrough](./docs/assets/lab-ledger-ticket-editor-walkthrough.mp4)
 
 ### Streaks
 
@@ -222,6 +227,7 @@ An npm-workspaces monorepo:
 
 ```
 Lab-Ledger/
+├─ labs/              # Canonical, committed lab HTML and lab-log.txt
 ├─ shared/            # Types and zod schemas used by both sides
 │  └─ src/index.ts
 ├─ server/            # Fastify + SQLite API
@@ -272,6 +278,8 @@ All routes are under `/api`. Invalid input returns `400`, an unknown lab returns
 | `PUT /labs/:slug/status` | Set status `{status}` |
 | `GET` / `PUT /labs/:slug/steps` | Read checked steps / toggle `{index, checked}` |
 | `GET` / `PUT /labs/:slug/journal` | Read / save the journal |
+| `GET` / `PUT /labs/:slug/ticket` | Read / save the ticket write-up |
+| `GET /labs/:slug/ticket/markdown` | Download the ticket write-up as Markdown |
 | `POST /labs/:slug/attachments` | Upload an image (multipart field `file`) |
 | `GET /attachments/:id` | Serve an uploaded image |
 | `GET /stats` | Home stats, streaks, and topic coverage |
@@ -336,7 +344,7 @@ The E2E suite runs against a throwaway copy of the fixtures on port 4318 (`.e2e/
 
 **Phase 1 (done):** ingestion and live reload, list and viewer, step progress and status, journal with screenshots, home stats, JSON and Markdown backup.
 
-**Phase 2 (planned):** ticket write-up editor, interview practice with spaced repetition (Leitner boxes), full-text search with Cmd/Ctrl+K, portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, richer filters and tags, a Sections reading view, a shortcut-help overlay, Docker and compose, and nightly automatic backups.
+**Phase 2 (underway):** ticket write-up editor (done); next are interview practice with spaced repetition (Leitner boxes), full-text search with Cmd/Ctrl+K, portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, richer filters and tags, a Sections reading view, a shortcut-help overlay, Docker and compose, and nightly automatic backups.
 
 **Phase 3 (stretch):** Obsidian sync, a calendar heatmap, a Raspberry Pi deploy guide (Caddy and Tailscale), a PWA for offline phone use, a weekly review summary, and a skill-gap view.
 
