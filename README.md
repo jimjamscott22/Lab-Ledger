@@ -181,6 +181,10 @@ Key presses inside the lab itself are forwarded, so the shortcuts work wherever 
 
 The Ticket tab records the ticket number, requester, issue, impact, troubleshooting steps, root cause, resolution, time to resolve, and follow-up. New write-ups are prefilled from the lab's scenario and ticket template when available, autosave after 800 ms, and can be downloaded as Markdown. Ticket data is included in JSON backups.
 
+<video src="./docs/assets/lab-ledger-ticket-editor-walkthrough.mp4" controls width="100%"></video>
+
+[Watch the ticket editor walkthrough](./docs/assets/lab-ledger-ticket-editor-walkthrough.mp4)
+
 ### Streaks
 
 A day counts if you checked a step or marked a lab completed. The current streak counts consecutive days ending today (or yesterday, if you haven't done anything yet today). A day on which you marked a lab *Skipped* and did nothing else neither breaks nor extends the streak.
