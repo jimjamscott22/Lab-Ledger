@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { StatusBody, StepToggleBody, JournalBody, TicketBody, TOPICS, BackupSchema } from './index';
+import {
+  StatusBody,
+  StepToggleBody,
+  JournalBody,
+  TicketBody,
+  QuestionReviewBody,
+  TOPICS,
+  BackupSchema,
+} from './index';
 
 describe('shared schemas', () => {
   it('has the 12 rotation topics', () => {
@@ -35,9 +43,14 @@ describe('shared schemas', () => {
     expect(TicketBody.parse(fields)).toEqual(fields);
     expect(() => TicketBody.parse({ ...fields, issue: 42 })).toThrow();
   });
+  it('accepts only the four question ratings', () => {
+    expect(QuestionReviewBody.parse({ rating: 'easy' })).toEqual({ rating: 'easy' });
+    expect(() => QuestionReviewBody.parse({ rating: 'perfect' })).toThrow();
+  });
   it('rejects unsafe slugs and ids in a backup', () => {
     const empty = { version: 1, exportedAt: 'x', labState: [], stepProgress: [], journals: [], attachments: [], activity: [] };
     expect(BackupSchema.parse(empty).tickets).toEqual([]);
+    expect(BackupSchema.parse(empty).questionReviews).toEqual([]);
     const bad = { ...empty, attachments: [{ id: '../x', slug: 'a', fileName: 'a.png', mime: 'image/png', bytes: 1, createdAt: 'x', dataBase64: '' }] };
     expect(() => BackupSchema.parse(bad)).toThrow();
   });

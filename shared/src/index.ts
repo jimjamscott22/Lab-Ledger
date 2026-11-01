@@ -21,6 +21,8 @@ export type RotationTopic = (typeof TOPICS)[number];
 export type Topic = RotationTopic | 'other';
 
 export type ParseStatus = 'ok' | 'partial' | 'failed';
+export const QUESTION_RATINGS = ['again', 'hard', 'good', 'easy'] as const;
+export type QuestionRating = (typeof QUESTION_RATINGS)[number];
 
 export interface Step {
   index: number;
@@ -93,6 +95,27 @@ export interface Ticket {
   updatedAt: string | null;
 }
 
+export interface QuestionReview {
+  slug: string;
+  questionIndex: number;
+  box: number;
+  lastRating: QuestionRating;
+  lastReviewed: string;
+  dueDate: string;
+}
+
+export interface DueQuestion {
+  slug: string;
+  labTitle: string;
+  labNumber: number | null;
+  topics: Topic[];
+  questionIndex: number;
+  question: string;
+  answerHtml: string;
+  box: number;
+  dueDate: string | null;
+}
+
 export interface LabSummary {
   slug: string;
   date: string;
@@ -132,6 +155,7 @@ export interface Stats {
   longestStreak: number;
   totalMinutes: number;
   avgDifficulty: number | null;
+  questionsDue: number;
   topicCoverage: TopicCoverage[];
   today: LabSummary | null;
   recentJournals: { slug: string; title: string; snippet: string; updatedAt: string }[];
@@ -162,6 +186,7 @@ export const TicketBody = z.object({
   timeToResolve: z.string().max(2_000),
   followUp: z.string().max(20_000),
 });
+export const QuestionReviewBody = z.object({ rating: z.enum(QUESTION_RATINGS) });
 
 const Slug = z.string().regex(/^[a-z0-9-]+$/);
 const Uuid = z.string().regex(/^[0-9a-f-]{36}$/);
@@ -204,6 +229,18 @@ export const BackupSchema = z.object({
         slug: Slug,
         fields: TicketBody,
         updatedAt: z.string().nullable(),
+      }),
+    )
+    .default([]),
+  questionReviews: z
+    .array(
+      z.object({
+        slug: Slug,
+        questionIndex: z.number().int().min(0),
+        box: z.number().int().min(1).max(5),
+        lastRating: z.enum(QUESTION_RATINGS),
+        lastReviewed: z.string(),
+        dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       }),
     )
     .default([]),

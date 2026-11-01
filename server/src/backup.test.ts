@@ -29,6 +29,11 @@ describe('backup', () => {
         followUp: 'Confirm login',
       },
     });
+    await app.inject({
+      method: 'POST',
+      url: '/api/questions/ad-user-onboarding/0/review',
+      payload: { rating: 'good' },
+    });
     const boundary = 'b';
     const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`), PNG, Buffer.from(`\r\n--${boundary}--\r\n`)]);
     await app.inject({ method: 'POST', url: '/api/labs/ad-user-onboarding/attachments', payload: body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
@@ -36,6 +41,7 @@ describe('backup', () => {
     const original = exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'));
     expect(original.attachments).toHaveLength(1);
     expect(original.tickets).toHaveLength(1);
+    expect(original.questionReviews).toHaveLength(1);
 
     const freshDb = openDb(':memory:');
     const freshDir = fs.mkdtempSync(path.join(os.tmpdir(), 'restore-'));

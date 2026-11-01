@@ -17,4 +17,6 @@ test('home shows zeroed stats and 12 topics', async ({ page }) => {
   await expect(page.getByText('0/7', { exact: true })).toBeVisible();
   await expect(page.locator('ul[aria-label="Topic coverage"] > li')).toHaveCount(12);
   await expect(page.getByRole('link', { name: 'Open' })).toBeVisible();
+  await expect(page.locator('.stat').filter({ hasText: 'Questions due' })).toContainText('21');
+  await expect(page.getByRole('link', { name: 'Practice now' })).toBeVisible();
 });

@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import LabList from './pages/LabList';
 import LabViewer from './pages/LabViewer';
 import Settings from './pages/Settings';
+import Practice from './pages/Practice';
 
 export default function App() {
   const { theme, toggle } = useTheme();
@@ -16,6 +17,7 @@ export default function App() {
         <nav aria-label="Main">
           <NavLink to="/" end>Home</NavLink>
           <NavLink to="/labs">Labs</NavLink>
+          <NavLink to="/practice">Practice</NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </nav>
         <button type="button" onClick={toggle} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
@@ -27,6 +29,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/labs" element={<LabList />} />
           <Route path="/labs/:slug" element={<LabViewer />} />
+          <Route path="/practice" element={<Practice />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<p>Page not found.</p>} />
         </Routes>

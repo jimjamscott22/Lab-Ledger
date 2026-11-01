@@ -62,6 +62,15 @@ button.primary { background: var(--accent); color: var(--accent-fg); border-colo
 .ticket-editor textarea { width: 100%; min-height: 90px; resize: vertical; font-family: inherit; font-weight: 400; }
 .ticket-editor input { width: 100%; font-weight: 400; }
 .ticket-actions { margin: 0; text-align: right; }
+.practice-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+.practice-head label { display: grid; gap: 4px; }
+.practice-card { max-width: 780px; margin: 24px auto; padding: 24px; }
+.practice-meta { color: var(--muted); }
+.practice-answer { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin: 20px 0; padding: 16px 0; }
+.practice-ratings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.practice-ratings button { min-height: 48px; }
+.practice-empty { max-width: 780px; margin: 24px auto; text-align: center; }
+kbd { font: 0.8em ui-monospace, monospace; border: 1px solid currentColor; border-radius: 3px; padding: 1px 4px; }
 .banner { background: var(--card); border: 1px solid var(--ok); border-radius: 8px; padding: 8px 12px; margin: 8px 0; display: flex; gap: 12px; align-items: center; }
 .toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 10; }
 .toast { background: var(--card); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; }
@@ -70,5 +79,6 @@ button.primary { background: var(--accent); color: var(--accent-fg); border-colo
   .viewer { grid-template-columns: 1fr; height: auto; }
   .viewer iframe { height: 60vh; }
   .panel { min-height: 50vh; }
+  .practice-ratings { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }

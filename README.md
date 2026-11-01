@@ -4,7 +4,7 @@ A personal, local-first web app for browsing the daily IT labs committed in `lab
 
 Everything runs on your own machine. There is no account, no cloud service, and no network call at runtime. Your progress and notes live in a single SQLite file that is easy to back up.
 
-> **Status:** Phase 1 (MVP) is complete. Phase 2 is underway; ticket write-ups are implemented.
+> **Status:** Phase 1 (MVP) is complete. Phase 2 is underway; ticket write-ups and interview practice are implemented.
 
 ---
 
@@ -38,6 +38,7 @@ Everything runs on your own machine. There is no account, no cloud service, and 
 - **Keep a journal.** Write Markdown notes with a starter template (*What I did / What broke / How I fixed it / Commands that worked*), record time taken, difficulty (1-5), and confidence (1-5). Paste or drag in screenshots. Notes autosave.
 - **See your stats.** The home page shows completed vs. total labs, current and longest streak, total time logged, average difficulty, coverage of the 12 rotation topics, today's lab, and your five most recent notes.
 - **Back up and restore** everything as JSON, or export your notes as Markdown.
+- **Practice interview questions.** Reveal answers, self-rate with Again / Hard / Good / Easy, and let five Leitner boxes schedule the next review.
 - **Light and dark themes**, keyboard shortcuts, and WCAG 2.1 AA accessibility checks.
 
 ## Quick start
@@ -150,6 +151,7 @@ Fixed behavior (not configurable): streaks and "today" use the `America/New_York
 | Home | `/` | Stat cards, today's lab, 12-topic coverage grid, recent notes |
 | Labs | `/labs` | All labs, newest first, with status chips, step counts, and a status filter |
 | Viewer | `/labs/:slug` | The lab, plus **Steps**, **Journal**, and **Ticket** tabs |
+| Practice | `/practice` | Due interview questions, answer reveal, self-rating, and topic filter |
 | Settings | `/settings` | Backup download, Markdown export, restore, manual rescan |
 
 On screens narrower than 768 px the side panel stacks under the lab.
@@ -182,6 +184,10 @@ The Ticket tab records the ticket number, requester, issue, impact, troubleshoot
 <video src="./docs/assets/lab-ledger-ticket-editor-walkthrough.mp4" controls width="100%"></video>
 
 [Watch the ticket editor walkthrough](./docs/assets/lab-ledger-ticket-editor-walkthrough.mp4)
+
+### Interview practice
+
+Every parsed interview question starts due. Reveal the answer, then rate it **Again**, **Hard**, **Good**, or **Easy**. Ratings move the question through Leitner boxes 1–5 with intervals of 1, 2, 4, 8, and 16 days. The Practice page can filter the due deck by topic; the dashboard shows the total due today. Press `R` to reveal and `1`–`4` to rate.
 
 ### Streaks
 
@@ -283,6 +289,8 @@ All routes are under `/api`. Invalid input returns `400`, an unknown lab returns
 | `POST /labs/:slug/attachments` | Upload an image (multipart field `file`) |
 | `GET /attachments/:id` | Serve an uploaded image |
 | `GET /stats` | Home stats, streaks, and topic coverage |
+| `GET /questions/due?topic=` | List questions due today, optionally filtered by topic |
+| `POST /questions/:slug/:index/review` | Rate a question and schedule its next review |
 | `GET /backup` · `GET /backup/markdown` · `POST /restore` | Backup, Markdown notes, restore |
 
 ## Security and privacy
@@ -344,12 +352,13 @@ The E2E suite runs against a throwaway copy of the fixtures on port 4318 (`.e2e/
 
 **Phase 1 (done):** ingestion and live reload, list and viewer, step progress and status, journal with screenshots, home stats, JSON and Markdown backup.
 
-**Phase 2 (underway):** ticket write-up editor (done); next are interview practice with spaced repetition (Leitner boxes), full-text search with Cmd/Ctrl+K, portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, richer filters and tags, a Sections reading view, a shortcut-help overlay, Docker and compose, and nightly automatic backups.
+**Phase 2 (underway):** ticket write-up editor and interview practice with spaced repetition (done); next are full-text search with Cmd/Ctrl+K, portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, richer filters and tags, a Sections reading view, a shortcut-help overlay, Docker and compose, and nightly automatic backups.
 
 **Phase 3 (stretch):** Obsidian sync, a calendar heatmap, a Raspberry Pi deploy guide (Caddy and Tailscale), a PWA for offline phone use, a weekly review summary, and a skill-gap view.
 
 ## Documentation
 
+- `docs/project-status.md`: the current implementation snapshot, verification baseline, remaining scope, and resume point.
 - `docs/lab-dashboard-design-doc.md`: the original design document (goals, features, data model, all phases).
 - `docs/superpowers/specs/2026-10-31-lab-dashboard-phase1-spec.md`: the Phase 1 build spec, with the decisions that resolve gaps in the design doc.
 - `docs/superpowers/plans/2026-10-31-lab-dashboard-phase1.md`: the task-by-task implementation plan the build followed.
