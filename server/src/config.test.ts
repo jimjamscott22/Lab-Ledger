@@ -5,7 +5,7 @@ import { loadConfig } from './config';
 describe('loadConfig', () => {
   it('uses the documented defaults', () => {
     const c = loadConfig({});
-    expect(c.labsDir).toBe('/workspace/labs');
+    expect(c.labsDir).toBe(path.resolve('./labs'));
     expect(c.dataDir).toBe(path.resolve('./data'));
     expect(c.port).toBe(4317);
     expect(c.host).toBe('127.0.0.1');

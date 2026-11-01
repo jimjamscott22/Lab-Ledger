@@ -1,8 +1,8 @@
 # Lab Dashboard — Design Document
 
-**Owner:** Jamie Scott · **Builder:** Cursor (AI coding agent) · **Status:** Ready to build · **Date:** 2026-10-29
+**Owner:** Jamie Scott · **Builder:** Cursor (AI coding agent) · **Status:** Phase 2 in progress · **Date:** 2026-10-29
 
-A personal, local-first web app for browsing the daily IT labs in `/workspace/labs` and recording what I did in each one. I'm a recent Information Science grad aiming for entry-level IT Support, Help Desk, or junior sysadmin roles. The app turns the labs into a practice log, an interview-prep tool, and a portfolio.
+A personal, local-first web app for browsing the daily IT labs committed in this repository's `labs/` directory and recording what I did in each one. I'm a recent Information Science grad aiming for entry-level IT Support, Help Desk, or junior sysadmin roles. The app turns the labs into a practice log, an interview-prep tool, and a portfolio.
 
 ---
 
@@ -14,6 +14,7 @@ A personal, local-first web app for browsing the daily IT labs in `/workspace/la
 ### Repository structure
 ```
 lab-dashboard/
+├─ labs/                    # canonical, committed lab HTML and lab-log.txt
 ├─ package.json            # npm workspaces: server, client, shared
 ├─ .env.example            # LABS_DIR, DATA_DIR, PORT
 ├─ shared/src/types.ts     # Lab, Progress, Journal, etc. (single source of truth)
@@ -28,7 +29,7 @@ lab-dashboard/
 │  ├─ pages/{Home,LabList,LabViewer,Practice,Search,Export,Settings}.tsx
 │  ├─ components/{LabFrame,StepList,JournalEditor,TicketEditor,StatCard,TopicGrid}.tsx
 │  ├─ hooks/ lib/api.ts  styles/
-├─ tests/fixtures/labs/    # copies of the 7 real labs + 2 malformed files
+├─ tests/fixtures/         # isolated lab copies plus malformed parser inputs
 ├─ Dockerfile, docker-compose.yml
 └─ data/                   # gitignored: app.db, attachments/, backups/
 ```
@@ -43,7 +44,7 @@ lab-dashboard/
 | Question | Default |
 |---|---|
 | Port | `5173` client (dev), `4317` API; prod serves both on `4317` |
-| Labs folder | `LABS_DIR` env var, default `/workspace/labs` |
+| Labs folder | Repository-owned `./labs`; `LABS_DIR` can override it |
 | Data folder | `DATA_DIR`, default `./data` |
 | Week start / streak timezone | `America/New_York`; a day counts if any step is checked or the lab is marked Completed |
 | Streak rule | Consecutive calendar days with activity. Skipped labs neither break nor extend it |

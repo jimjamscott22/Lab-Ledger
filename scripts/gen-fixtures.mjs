@@ -2,11 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../tests/fixtures');
-const labsDir = path.join(root, 'labs');
-const badDir = path.join(root, 'malformed');
-fs.rmSync(root, { recursive: true, force: true });
-fs.mkdirSync(labsDir, { recursive: true });
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const fixturesRoot = path.join(repoRoot, 'tests/fixtures');
+const labsDirs = [path.join(repoRoot, 'labs'), path.join(fixturesRoot, 'labs')];
+const badDir = path.join(fixturesRoot, 'malformed');
+fs.rmSync(fixturesRoot, { recursive: true, force: true });
+for (const labsDir of labsDirs) {
+  fs.rmSync(labsDir, { recursive: true, force: true });
+  fs.mkdirSync(labsDir, { recursive: true });
+}
 fs.mkdirSync(badDir, { recursive: true });
 
 const LABS = [
@@ -90,11 +94,13 @@ ${parts.join('\n')}
 `;
 }
 
-for (const l of LABS) fs.writeFileSync(path.join(labsDir, `${l.date}-${l.slug}.html`), build(l));
-fs.writeFileSync(
-  path.join(labsDir, 'lab-log.txt'),
-  LABS.map((l) => `${l.date} | Lab ${String(l.n).padStart(2, '0')} | ${l.log} | ${l.slug}`).join('\n') + '\n',
-);
+for (const labsDir of labsDirs) {
+  for (const l of LABS) fs.writeFileSync(path.join(labsDir, `${l.date}-${l.slug}.html`), build(l));
+  fs.writeFileSync(
+    path.join(labsDir, 'lab-log.txt'),
+    LABS.map((l) => `${l.date} | Lab ${String(l.n).padStart(2, '0')} | ${l.log} | ${l.slug}`).join('\n') + '\n',
+  );
+}
 
 fs.writeFileSync(
   path.join(badDir, '2026-10-30-malformed-lab.html'),
@@ -102,4 +108,4 @@ fs.writeFileSync(
 );
 fs.writeFileSync(path.join(badDir, '2026-10-31-empty-lab.html'), '');
 fs.writeFileSync(path.join(badDir, 'not-a-lab.html'), '<html><body><h1>Wrong filename</h1></body></html>');
-console.log('Fixtures written to', root);
+console.log('Labs written to', labsDirs.join(' and '));

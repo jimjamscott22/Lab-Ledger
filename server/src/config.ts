@@ -11,7 +11,7 @@ export interface Config {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
-    labsDir: path.resolve(env.LABS_DIR ?? '/workspace/labs'),
+    labsDir: path.resolve(env.LABS_DIR ?? './labs'),
     dataDir: path.resolve(env.DATA_DIR ?? './data'),
     port: Number(env.PORT ?? 4317),
     host: env.HOST ?? '127.0.0.1',
