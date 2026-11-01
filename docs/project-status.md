@@ -10,9 +10,9 @@ This document records the repository state at the current pause point. The READM
 ### Repository-owned labs
 
 - `labs/` is the canonical, committed lab source.
-- The default `LABS_DIR` is `./labs`; an environment override is still supported.
+- The default `LABS_DIR` is `./labs` (resolved relative to the repository root); an environment override is still supported.
 - Seven labs and `lab-log.txt` are committed.
-- `npm run fixtures` regenerates both the canonical labs and isolated test copies.
+- `npm run fixtures` regenerates isolated test copies in `tests/fixtures/labs` (and only resets `labs/` when passed `-- --canonical`).
 
 ### Phase 1
 
@@ -51,11 +51,11 @@ This document records the repository state at the current pause point. The READM
 
 At this snapshot:
 
-- `npm test`: 109 tests passing across 21 test files.
+- `npm test`: 116 tests passing across 23 test files.
 - `npm run lint`: passing.
 - `npm run typecheck`: passing.
 - `npm run build`: passing.
-- `npm run e2e`: 25 browser tests passing.
+- `npm run e2e`: 26 browser tests passing.
 - Browser coverage includes the Practice workflow and serious/critical accessibility checks in light and dark themes.
 
 ## Not implemented yet

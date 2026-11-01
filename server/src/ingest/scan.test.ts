@@ -110,6 +110,30 @@ describe('scanLabs', () => {
     expect(repo.getChecked(db, lab.slug)).toEqual([1]);
   });
 
+  it('preserves question review records when a lab file gains or reorders questions', () => {
+    const dir = copyFixtures();
+    const db = openDb(':memory:');
+    scanLabs(db, dir);
+    db.prepare(
+      `INSERT INTO question_reviews (slug, q_index, box, last_rating, last_reviewed, due_date)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('ad-user-onboarding', 0, 3, 'easy', '2026-10-29T10:00:00Z', '2026-11-02');
+
+    const file = path.join(dir, '2026-10-23-ad-user-onboarding.html');
+    const html = fs.readFileSync(file, 'utf8');
+    const inserted = html.replace(
+      '<details><summary>Question 1 for AD User Onboarding?</summary>',
+      '<details><summary>Brand new Question 0?</summary><p>Answer 0.</p></details>\n<details><summary>Question 1 for AD User Onboarding?</summary>',
+    );
+    fs.writeFileSync(file, inserted);
+    scanLabs(db, dir);
+
+    const rows = db
+      .prepare('SELECT q_index, box, due_date FROM question_reviews WHERE slug=? ORDER BY q_index')
+      .all('ad-user-onboarding');
+    expect(rows).toEqual([{ q_index: 1, box: 3, due_date: '2026-11-02' }]);
+  });
+
   it('never modifies the source files', () => {
     const dir = copyFixtures({ malformed: true });
     const before = hashDir(dir);

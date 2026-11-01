@@ -8,6 +8,7 @@ import { LAB_FILE_RE, parseLabHtml } from './parse';
 import { parseLabLog } from './labLog';
 import { classifyTopics } from './topics';
 import { remapProgress } from './stepMatch';
+import { reconcileQuestionReviews } from '../questions';
 
 export interface ScanResult {
   added: string[];
@@ -78,6 +79,7 @@ export function scanLabs(db: Db, labsDir: string, now: () => Date = () => new Da
         result.updated.push(slug);
         const rows = repo.getProgressRows(db, slug);
         if (rows.length) repo.replaceProgress(db, slug, remapProgress(rows, lab.steps));
+        reconcileQuestionReviews(db, slug, prev.questions, lab.questions);
       }
     }
 
