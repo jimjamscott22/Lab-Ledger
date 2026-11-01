@@ -86,13 +86,11 @@ The app reads lab files from `LABS_DIR` (default `./labs`). The repository's `la
 
 The lab files are treated as **read-only**. The app never modifies, renames, or deletes them.
 
-To regenerate the committed sample labs and their isolated test-fixture copies:
+To regenerate the isolated test-fixture labs in `tests/fixtures/labs` (pass `-- --canonical` only if you intentionally want to reset `labs/` to the seven sample labs):
 
 ```bash
 npm run fixtures
 ```
-
-They are written to both `labs/` and `tests/fixtures/labs`.
 
 ### 4. Configure (optional)
 
