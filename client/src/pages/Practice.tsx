@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   QUESTION_RATINGS,
   TOPICS,
+  type DueQuestion,
   type QuestionRating,
 } from '@lab-ledger/shared';
 import { api } from '../lib/api';
@@ -17,15 +18,23 @@ const RATING_LABELS: Record<QuestionRating, string> = {
   easy: 'Easy',
 };
 
+const cardKey = (question: DueQuestion) => `${question.slug}#${question.questionIndex}`;
+
 export default function Practice() {
   const [topic, setTopic] = useState('');
   const [revealed, setRevealed] = useState(false);
   const [rating, setRating] = useState<QuestionRating | null>(null);
+  const [dismissedKeys, setDismissedKeys] = useState<string[]>([]);
   const { data, error, loading, reload } = useAsync(
     () => api.dueQuestions(topic || undefined),
     [topic],
   );
-  const current = data?.[0];
+  const deck = data?.filter((question) => !dismissedKeys.includes(cardKey(question))) ?? [];
+  const current = deck[0];
+
+  useEffect(() => {
+    setDismissedKeys([]);
+  }, [data]);
 
   useEffect(() => {
     setRevealed(false);
@@ -33,9 +42,11 @@ export default function Practice() {
 
   async function rate(nextRating: QuestionRating) {
     if (!current || rating) return;
+    const reviewedKey = cardKey(current);
     setRating(nextRating);
     try {
       await api.reviewQuestion(current.slug, current.questionIndex, nextRating);
+      setDismissedKeys((keys) => (keys.includes(reviewedKey) ? keys : [...keys, reviewedKey]));
       setRevealed(false);
       reload();
     } finally {
