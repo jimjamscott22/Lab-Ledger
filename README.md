@@ -360,6 +360,7 @@ The E2E suite runs against a throwaway copy of the fixtures on port 4318 (`.e2e/
 
 ## Documentation
 
+- `docs/project-status.md`: the current implementation snapshot, verification baseline, remaining scope, and resume point.
 - `docs/lab-dashboard-design-doc.md`: the original design document (goals, features, data model, all phases).
 - `docs/superpowers/specs/2026-10-31-lab-dashboard-phase1-spec.md`: the Phase 1 build spec, with the decisions that resolve gaps in the design doc.
 - `docs/superpowers/plans/2026-10-31-lab-dashboard-phase1.md`: the task-by-task implementation plan the build followed.
