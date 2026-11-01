@@ -103,6 +103,19 @@ test('ticket write-up is prefilled, autosaves, and exports as Markdown', async (
   expect(await markdown.text()).toContain('USB power management disabled wake.');
 });
 
+test('a pending ticket edit is saved when the page reloads or leaves immediately', async ({
+  page,
+}) => {
+  await page.goto('/labs/ad-user-onboarding');
+  await page.getByRole('tab', { name: 'Ticket' }).click();
+  await page.getByRole('textbox', { name: 'Ticket #', exact: true }).fill('INC-9001');
+  await page.reload();
+  await page.getByRole('tab', { name: 'Ticket' }).click();
+  await expect(page.getByRole('textbox', { name: 'Ticket #', exact: true })).toHaveValue(
+    'INC-9001',
+  );
+});
+
 test('completing every step offers to mark the lab completed', async ({ page }) => {
   await page.goto('/labs/ad-user-onboarding');
   const boxes = page.locator('ol[aria-label="Steps"] input[type="checkbox"]');
