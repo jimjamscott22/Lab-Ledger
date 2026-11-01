@@ -2,15 +2,29 @@ import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { loadConfig } from './config';
 
+const repoRoot = path.resolve(import.meta.dirname, '../..');
+
 describe('loadConfig', () => {
   it('uses the documented defaults', () => {
     const c = loadConfig({});
-    expect(c.labsDir).toBe(path.resolve('./labs'));
+    expect(c.labsDir).toBe(path.join(repoRoot, 'labs'));
     expect(c.dataDir).toBe(path.resolve('./data'));
     expect(c.port).toBe(4317);
     expect(c.host).toBe('127.0.0.1');
     expect(c.timezone).toBe('America/New_York');
     expect(c.watchStabilityMs).toBe(2000);
+  });
+
+  it('resolves the default labsDir to the repository root regardless of process.cwd()', () => {
+    const prevCwd = process.cwd();
+    const serverDir = path.join(repoRoot, 'server');
+    try {
+      process.chdir(serverDir);
+      const c = loadConfig({});
+      expect(c.labsDir).toBe(path.join(repoRoot, 'labs'));
+    } finally {
+      process.chdir(prevCwd);
+    }
   });
 
   it('reads overrides from the environment', () => {

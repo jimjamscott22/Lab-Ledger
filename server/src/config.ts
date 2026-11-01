@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+const repoRoot = path.resolve(import.meta.dirname, '../..');
+
 export interface Config {
   labsDir: string;
   dataDir: string;
@@ -11,7 +13,7 @@ export interface Config {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
-    labsDir: path.resolve(env.LABS_DIR ?? './labs'),
+    labsDir: env.LABS_DIR ? path.resolve(env.LABS_DIR) : path.join(repoRoot, 'labs'),
     dataDir: path.resolve(env.DATA_DIR ?? './data'),
     port: Number(env.PORT ?? 4317),
     host: env.HOST ?? '127.0.0.1',
