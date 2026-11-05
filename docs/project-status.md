@@ -1,6 +1,6 @@
 # Project status
 
-**Snapshot date:** 2026-11-01  
+**Snapshot date:** 2026-11-05  
 **Product stage:** Phase 1 complete; Phase 2 in progress
 
 This document records the repository state at the current pause point. The README remains the operational guide; the original design document remains the product source of truth.
@@ -39,11 +39,19 @@ This document records the repository state at the current pause point. The READM
   - Dashboard due count.
   - JSON backup/restore coverage.
 
+- Full-text search:
+  - SQLite FTS5 index (`search_idx`, Porter stemming) over lab text, journals, and ticket write-ups.
+  - The index is updated on every lab ingest, journal save, and ticket save, rebuilt after a restore, and backfilled by the version 4 migration.
+  - `GET /api/search?q=&limit=` sanitises input into quoted terms (the last one a prefix match) and returns structured snippet parts, so the client never renders HTML from search results.
+  - Search page with highlighted snippets; results deep-link to the Journal or Ticket tab.
+  - Global `Ctrl/Cmd+K` shortcut.
+
 ## Persistence and migrations
 
-- SQLite schema version: 3.
+- SQLite schema version: 4.
 - Version 2 adds `tickets`.
 - Version 3 adds `question_reviews`.
+- Version 4 adds the `search_idx` FTS5 table and indexes existing data.
 - Existing version-1 backups remain accepted; missing Phase 2 collections default to empty arrays.
 - Runtime user data remains under `DATA_DIR` and is not committed.
 
@@ -51,34 +59,31 @@ This document records the repository state at the current pause point. The READM
 
 At this snapshot:
 
-- `npm test`: 116 tests passing across 23 test files.
+- `npm test`: 151 tests passing across 26 test files.
 - `npm run lint`: passing.
 - `npm run typecheck`: passing.
 - `npm run build`: passing.
-- `npm run e2e`: 26 browser tests passing.
-- Browser coverage includes the Practice workflow and serious/critical accessibility checks in light and dark themes.
+- `npm run e2e`: 37 browser tests passing.
+- Browser coverage includes the Practice and Search workflows and serious/critical accessibility checks in light and dark themes.
 
 ## Not implemented yet
 
 Remaining Phase 2 work:
 
-1. Full-text search with `Cmd/Ctrl+K`.
-2. Portfolio export with Markdown, static HTML, print-to-PDF, and sensitive-data scanning.
-3. Richer lab filters and tags.
-4. Sections reading view.
-5. Shortcut-help overlay.
-6. Docker and Compose support.
-7. Nightly automatic backups.
+1. Portfolio export with Markdown, static HTML, print-to-PDF, and sensitive-data scanning.
+2. Richer lab filters and tags.
+3. Sections reading view.
+4. Shortcut-help overlay (should list the new `Ctrl/Cmd+K` shortcut).
+5. Docker and Compose support.
+6. Nightly automatic backups.
 
 Phase 3 remains unchanged: Obsidian sync, activity heatmap, Raspberry Pi deployment guide, PWA support, weekly review summaries, and skill-gap analysis.
 
 ## Resume point
 
-The next cohesive vertical slice is full-text search:
+Suggested next slices, in order:
 
-- Add the FTS migration and indexing for lab content, journals, and ticket write-ups.
-- Add `GET /api/search?q=`.
-- Add a Search page with highlighted snippets.
-- Wire global `Cmd/Ctrl+K`.
-- Include unit, API, browser, security, and accessibility coverage.
-
+1. Shortcut-help overlay on `?`, then richer lab filters and tags (the Labs page can reuse the search endpoint for its text filter).
+2. Sections reading view.
+3. Portfolio export with the sensitive-data scan.
+4. Nightly backups, then Docker and Compose.

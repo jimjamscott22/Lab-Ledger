@@ -4,7 +4,7 @@ A personal, local-first web app for browsing the daily IT labs committed in `lab
 
 Everything runs on your own machine. There is no account, no cloud service, and no network call at runtime. Your progress and notes live in a single SQLite file that is easy to back up.
 
-> **Status:** Phase 1 (MVP) is complete. Phase 2 is underway; ticket write-ups and interview practice are implemented.
+> **Status:** Phase 1 (MVP) is complete. Phase 2 is underway; ticket write-ups, interview practice, and full-text search are implemented.
 
 ---
 
@@ -39,6 +39,7 @@ Everything runs on your own machine. There is no account, no cloud service, and 
 - **See your stats.** The home page shows completed vs. total labs, current and longest streak, total time logged, average difficulty, coverage of the 12 rotation topics, today's lab, and your five most recent notes.
 - **Back up and restore** everything as JSON, or export your notes as Markdown.
 - **Practice interview questions.** Reveal answers, self-rate with Again / Hard / Good / Easy, and let five Leitner boxes schedule the next review.
+- **Search everything.** Press `Ctrl+K` (or `Cmd+K`) anywhere to search lab text, your journal notes, and your ticket write-ups, with highlighted snippets that link straight to the right tab.
 - **Light and dark themes**, keyboard shortcuts, and WCAG 2.1 AA accessibility checks.
 
 ## Quick start
@@ -152,13 +153,16 @@ Fixed behavior (not configurable): streaks and "today" use the `America/New_York
 | Labs | `/labs` | All labs, newest first, with status chips, step counts, and a status filter |
 | Viewer | `/labs/:slug` | The lab, plus **Steps**, **Journal**, and **Ticket** tabs |
 | Practice | `/practice` | Due interview questions, answer reveal, self-rating, and topic filter |
+| Search | `/search?q=` | Full-text search over labs, journals, and tickets with highlighted snippets |
 | Settings | `/settings` | Backup download, Markdown export, restore, manual rescan |
 
 On screens narrower than 768 px the side panel stacks under the lab.
 
-### Keyboard shortcuts (in the viewer)
+### Keyboard shortcuts
 
-Shortcuts are disabled while you are typing in a text field.
+`Ctrl+K` / `Cmd+K` opens Search from any page (and focuses the search box if you are already there). It works even while you are typing in a field.
+
+The viewer shortcuts below are disabled while you are typing in a text field.
 
 | Key | Action |
 |---|---|
@@ -188,6 +192,10 @@ The Ticket tab records the ticket number, requester, issue, impact, troubleshoot
 ### Interview practice
 
 Every parsed interview question starts due. Reveal the answer, then rate it **Again**, **Hard**, **Good**, or **Easy**. Ratings move the question through Leitner boxes 1–5 with intervals of 1, 2, 4, 8, and 16 days. The Practice page can filter the due deck by topic; the dashboard shows the total due today. Press `R` to reveal and `1`–`4` to rate.
+
+### Search
+
+Search covers the text of every lab, your journal notes, and your ticket write-ups. Results update as you type, rank title matches first, and match word stems and prefixes (`permission` finds *permissions*; `kerb` finds *kerberos*). Every word you type must match. Each result links to the lab, or straight to its Journal or Ticket tab. Search syntax such as quotes or `AND`/`OR` is treated as plain words. The index is built into the SQLite database, stays current as you edit, and is rebuilt after a restore.
 
 ### Streaks
 
@@ -243,7 +251,8 @@ Lab-Ledger/
 │     ├─ config.ts
 │     ├─ db/                # schema, migrations, repository
 │     ├─ ingest/            # parse, lab-log, topics, step matching, scan, watch
-│     ├─ routes/            # labs, progress, journal, attachments, stats, backup
+│     ├─ routes/            # labs, progress, journal, ticket, questions, search, attachments, stats, backup
+│     ├─ search.ts          # SQLite FTS5 index, query sanitising, snippets
 │     ├─ stats.ts           # Streaks and home stats
 │     └─ backup.ts          # JSON/Markdown backup and restore
 ├─ client/            # Vite + React + TypeScript UI
@@ -289,6 +298,7 @@ All routes are under `/api`. Invalid input returns `400`, an unknown lab returns
 | `POST /labs/:slug/attachments` | Upload an image (multipart field `file`) |
 | `GET /attachments/:id` | Serve an uploaded image |
 | `GET /stats` | Home stats, streaks, and topic coverage |
+| `GET /search?q=&limit=` | Full-text search (`q` up to 200 characters, `limit` 1-50, default 25); returns ranked results with highlighted snippet parts |
 | `GET /questions/due?topic=` | List questions due today, optionally filtered by topic |
 | `POST /questions/:slug/:index/review` | Rate a question and schedule its next review |
 | `GET /backup` · `GET /backup/markdown` · `POST /restore` | Backup, Markdown notes, restore |
@@ -319,9 +329,9 @@ Conventions: TypeScript strict mode, ESM, Prettier (single quotes, 100 columns),
 ## Testing
 
 ```bash
-npm test                               # 97 unit and integration tests
+npm test                               # 151 unit and integration tests
 npx playwright install --with-deps chromium   # one-time, for E2E
-npm run e2e                            # 20 browser tests
+npm run e2e                            # 37 browser tests
 npm run lint && npm run typecheck
 ```
 
@@ -331,6 +341,7 @@ What is covered:
 - **Ingestion:** scan, lab-log merge, topics, duplicate slugs, missing files, progress remapping after edits, and a check that source files are never modified.
 - **Watcher:** add, change, and remove events arrive within 5 seconds.
 - **API:** status and steps, journal, attachments (type and size limits), stats and streaks, and backup/restore round trips.
+- **Search:** query sanitising against FTS syntax, ranking, stemming and prefixes, index upkeep on every save, backfill when upgrading an existing database, and re-indexing after a restore.
 - **E2E (Playwright):** step sync between the lab and the side panel, persistence across reload, arrow-key navigation, journal autosave with a pasted screenshot, backup and restore, the new-lab toast, the iframe sandbox and CSP, zero external requests, and axe accessibility checks in light and dark themes.
 
 The E2E suite runs against a throwaway copy of the fixtures on port 4318 (`.e2e/`, git-ignored), so it never touches your real labs or data.
@@ -352,7 +363,7 @@ The E2E suite runs against a throwaway copy of the fixtures on port 4318 (`.e2e/
 
 **Phase 1 (done):** ingestion and live reload, list and viewer, step progress and status, journal with screenshots, home stats, JSON and Markdown backup.
 
-**Phase 2 (underway):** ticket write-up editor and interview practice with spaced repetition (done); next are full-text search with Cmd/Ctrl+K, portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, richer filters and tags, a Sections reading view, a shortcut-help overlay, Docker and compose, and nightly automatic backups.
+**Phase 2 (underway):** ticket write-up editor, interview practice with spaced repetition, and full-text search (done); full-text search with Cmd/Ctrl+K is done; next are portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, richer filters and tags, a Sections reading view, a shortcut-help overlay, Docker and compose, and nightly automatic backups.
 
 **Phase 3 (stretch):** Obsidian sync, a calendar heatmap, a Raspberry Pi deploy guide (Caddy and Tailscale), a PWA for offline phone use, a weekly review summary, and a skill-gap view.
 
