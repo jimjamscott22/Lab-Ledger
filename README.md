@@ -340,6 +340,7 @@ The E2E suite runs against a throwaway copy of the fixtures on port 4318 (`.e2e/
 | Symptom | Fix |
 |---|---|
 | `npm install` fails building `better-sqlite3` | Install build tools (Python 3 and a C/C++ compiler), then run `npm rebuild better-sqlite3` |
+| Labs fail to load and the API exits with `Could not locate the bindings file` | The native SQLite binary is missing. From the repository root, run `npm rebuild better-sqlite3`, then restart `npm run dev`. Confirm that `http://127.0.0.1:4317/api/labs` returns lab JSON. If npm reports blocked install scripts, review them with `npm install-scripts ls` on npm versions that support it |
 | The labs list is empty | Check that `LABS_DIR` points at the right folder and that filenames match `YYYY-MM-DD-<slug>.html` |
 | A new lab doesn't appear | Wait a few seconds (the watcher waits for the file to settle), or use Settings -> *Rescan now*. On network or Docker volumes, file events can be unreliable, and the 15-minute rescan will still catch it |
 | Port already in use | Set `PORT` to a free port. In dev, the client expects the API on 4317, so change the proxy target in `client/vite.config.ts` too |
