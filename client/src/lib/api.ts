@@ -10,6 +10,7 @@ import type {
   TicketFields,
   QuestionRating,
   QuestionReview,
+  SearchResult,
 } from '@lab-ledger/shared';
 
 async function request<T>(path: string, init: { method?: string; json?: unknown; form?: FormData } = {}): Promise<T> {
@@ -65,6 +66,7 @@ export const api = {
       method: 'POST',
       json: { rating },
     }),
+  search: (q: string) => request<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
   uploadAttachment: (slug: string, file: File) => {
     const form = new FormData();
     form.append('file', file);

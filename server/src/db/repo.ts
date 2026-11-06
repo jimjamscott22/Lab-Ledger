@@ -1,6 +1,7 @@
 import type { Journal, Lab, LabState, LabStatus, LabSummary, Ticket, TicketFields } from '@lab-ledger/shared';
 import type { Db } from './open';
 import type { ProgressRow } from '../ingest/stepMatch';
+import { indexJournal, indexLab, indexTicket } from '../search';
 
 interface LabRow {
   parsed_json: string;
@@ -38,6 +39,7 @@ export function upsertLab(db: Db, lab: Lab): void {
     missing: lab.missingFile ? 1 : 0,
     ingestedAt: lab.ingestedAt,
   });
+  indexLab(db, lab);
 }
 
 export function getLab(db: Db, slug: string): Lab | null {
@@ -150,6 +152,7 @@ export function putJournal(db: Db, slug: string, j: Omit<Journal, 'updatedAt'>, 
      ON CONFLICT(slug) DO UPDATE SET body_md=excluded.body_md, time_taken_min=excluded.time_taken_min,
        difficulty=excluded.difficulty, confidence=excluded.confidence, updated_at=excluded.updated_at`,
   ).run(slug, j.bodyMd, j.timeTakenMin, j.difficulty, j.confidence, nowIso);
+  indexJournal(db, slug, j.bodyMd);
   return getJournal(db, slug)!;
 }
 
@@ -167,6 +170,7 @@ export function putTicket(db: Db, slug: string, fields: TicketFields, nowIso: st
     `INSERT INTO tickets (slug, fields_json, updated_at) VALUES (?,?,?)
      ON CONFLICT(slug) DO UPDATE SET fields_json=excluded.fields_json, updated_at=excluded.updated_at`,
   ).run(slug, JSON.stringify(fields), nowIso);
+  indexTicket(db, slug, fields);
   return getTicket(db, slug)!;
 }
 

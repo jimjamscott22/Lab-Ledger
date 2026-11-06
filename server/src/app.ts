@@ -15,6 +15,7 @@ import { registerStatsRoutes } from './routes/stats';
 import { registerBackupRoutes } from './routes/backup';
 import { registerTicketRoutes } from './routes/ticket';
 import { registerQuestionRoutes } from './routes/questions';
+import { registerSearchRoutes } from './routes/search';
 
 export interface AppContext {
   config: Config;
@@ -39,6 +40,7 @@ export async function buildApp(ctx: AppContext, opts: { clientDir?: string | nul
   registerJournalRoutes(app, ctx);
   registerTicketRoutes(app, ctx);
   registerQuestionRoutes(app, ctx);
+  registerSearchRoutes(app, ctx);
   await registerAttachmentRoutes(app, ctx);
   registerStatsRoutes(app, ctx);
   registerBackupRoutes(app, ctx);

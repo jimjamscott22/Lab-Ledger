@@ -82,3 +82,10 @@ kbd { font: 0.8em ui-monospace, monospace; border: 1px solid currentColor; borde
   .practice-ratings { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+.search-form { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.search-form input { font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--fg); }
+.results { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.results .snippet { margin: 6px 0 0; color: var(--muted); }
+mark { background: #ffe08a; color: #1a1a1a; border-radius: 3px; padding: 0 2px; }
+kbd { font: inherit; font-size: 0.75rem; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; opacity: 0.85; }
+.muted { color: var(--muted); }

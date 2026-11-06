@@ -161,6 +161,23 @@ export interface Stats {
   recentJournals: { slug: string; title: string; snippet: string; updatedAt: string }[];
 }
 
+export const SEARCH_KINDS = ['lab', 'journal', 'ticket'] as const;
+export type SearchKind = (typeof SEARCH_KINDS)[number];
+
+export interface SnippetPart {
+  text: string;
+  match: boolean;
+}
+
+export interface SearchResult {
+  slug: string;
+  kind: SearchKind;
+  labTitle: string;
+  labNumber: number | null;
+  date: string;
+  snippet: SnippetPart[];
+}
+
 export interface LabEventPayload {
   type: 'lab:added' | 'lab:updated' | 'lab:removed';
   slug: string;
@@ -185,6 +202,10 @@ export const TicketBody = z.object({
   resolution: z.string().max(100_000),
   timeToResolve: z.string().max(2_000),
   followUp: z.string().max(20_000),
+});
+export const SearchQuery = z.object({
+  q: z.string().max(200),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
 });
 export const QuestionReviewBody = z.object({ rating: z.enum(QUESTION_RATINGS) });
 
