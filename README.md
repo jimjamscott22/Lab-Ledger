@@ -160,7 +160,7 @@ On screens narrower than 768 px the side panel stacks under the lab.
 
 ### Keyboard shortcuts
 
-`Ctrl+K` / `Cmd+K` opens Search from any page (and focuses the search box if you are already there). It works even while you are typing in a field.
+`Ctrl+K` / `Cmd+K` opens Search from any page (and focuses the search box if you are already there). It works even while you are typing in a field, and while focus is inside a lab.
 
 The viewer shortcuts below are disabled while you are typing in a text field.
 
@@ -329,9 +329,9 @@ Conventions: TypeScript strict mode, ESM, Prettier (single quotes, 100 columns),
 ## Testing
 
 ```bash
-npm test                               # 151 unit and integration tests
+npm test                               # 153 unit and integration tests
 npx playwright install --with-deps chromium   # one-time, for E2E
-npm run e2e                            # 37 browser tests
+npm run e2e                            # 38 browser tests
 npm run lint && npm run typecheck
 ```
 

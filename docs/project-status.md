@@ -59,11 +59,11 @@ This document records the repository state at the current pause point. The READM
 
 At this snapshot:
 
-- `npm test`: 151 tests passing across 26 test files.
+- `npm test`: 153 tests passing across 27 test files.
 - `npm run lint`: passing.
 - `npm run typecheck`: passing.
 - `npm run build`: passing.
-- `npm run e2e`: 37 browser tests passing.
+- `npm run e2e`: 38 browser tests passing.
 - Browser coverage includes the Practice and Search workflows and serious/critical accessibility checks in light and dark themes.
 
 ## Not implemented yet

@@ -27,6 +27,14 @@ test('Ctrl+K on a lab page opens search instead of moving between steps', async 
   await expect(page).toHaveURL(/\/search$/);
 });
 
+test('Ctrl+K works while focus is inside the lab itself', async ({ page }) => {
+  await page.goto('/labs/ad-user-onboarding');
+  await page.frameLocator('iframe[title^="Lab:"]').locator('input[type="checkbox"]').first().focus();
+  await page.keyboard.press('Control+k');
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(page.getByLabel(SEARCH_LABEL)).toBeFocused();
+});
+
 test('a journal typed in the editor becomes searchable and opens on the journal tab', async ({ page }) => {
   await page.goto('/labs/gpo-drive-mapping');
   await page.getByRole('tab', { name: 'Journal' }).click();
