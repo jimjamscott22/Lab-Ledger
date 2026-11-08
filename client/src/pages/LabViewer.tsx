@@ -39,7 +39,16 @@ export default function LabViewer() {
     requestedTab === 'journal' || requestedTab === 'ticket' ? requestedTab : 'steps',
   );
   const [allChecked, setAllChecked] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const journalRef = useRef<HTMLTextAreaElement>(null);
+  const mutationChain = useRef<Promise<void>>(Promise.resolve());
+
+  // Serialize step/status mutations so rapid clicks reach the server in
+  // click order, and roll the optimistic UI back when a mutation fails.
+  const enqueueMutation = (run: () => Promise<void>) => {
+    mutationChain.current = mutationChain.current.then(run, run);
+    return mutationChain.current;
+  };
 
   useEffect(() => {
     if (!data) return;
@@ -58,16 +67,41 @@ export default function LabViewer() {
       else next.delete(index);
       return next;
     });
-    const res = await api.toggleStep(slug, index, value);
-    setStatus(res.status);
-    setAllChecked(res.allChecked && res.status !== 'completed');
+    await enqueueMutation(async () => {
+      try {
+        const res = await api.toggleStep(slug, index, value);
+        setChecked(new Set(res.checked));
+        setStatus(res.status);
+        setAllChecked(res.allChecked && res.status !== 'completed');
+        setSaveError('');
+      } catch {
+        // Undo this toggle unless a later click already changed the step.
+        setChecked((prev) => {
+          if (prev.has(index) !== value) return prev;
+          const next = new Set(prev);
+          if (value) next.delete(index);
+          else next.add(index);
+          return next;
+        });
+        setSaveError('Could not save that step change. It has been undone.');
+      }
+    });
   }
 
   async function changeStatus(next: LabStatus) {
+    const previous = status;
     setStatus(next);
-    const state = await api.setStatus(slug, next);
-    setStatus(state.status);
-    if (next === 'completed') setAllChecked(false);
+    await enqueueMutation(async () => {
+      try {
+        const state = await api.setStatus(slug, next);
+        setStatus(state.status);
+        if (next === 'completed') setAllChecked(false);
+        setSaveError('');
+      } catch {
+        setStatus((current) => (current === next ? previous : current));
+        setSaveError('Could not save that status change. It has been undone.');
+      }
+    });
   }
 
   const onKey = useHotkeys((e) => {
@@ -168,6 +202,12 @@ export default function LabViewer() {
           </button>
         )}
       </div>
+
+      {saveError ? (
+        <div className="banner" role="alert">
+          <span>{saveError}</span>
+        </div>
+      ) : null}
 
       {allChecked ? (
         <div className="banner" role="status">

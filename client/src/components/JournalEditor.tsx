@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type RefObject } from 'react';
+import { useMemo, useState, type ClipboardEvent, type DragEvent, type RefObject } from 'react';
 import type { Journal } from '@lab-ledger/shared';
 import { api } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
+import { useAutosave } from '../lib/useAutosave';
 
 const TEMPLATE = '## What I did\n\n## What broke\n\n## How I fixed it\n\n## Commands that worked\n\n';
 
@@ -21,56 +22,20 @@ export function JournalEditor({ slug, initial, textareaRef }: Props) {
     difficulty: initial?.difficulty ?? null,
     confidence: initial?.confidence ?? null,
   });
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const latest = useRef(fields);
-  const dirty = useRef(false);
-  latest.current = fields;
-
-  const save = async () => {
-    dirty.current = false;
-    setSaveState('saving');
-    try {
-      await api.saveJournal(slug, latest.current);
-      setSaveState('saved');
-    } catch {
-      dirty.current = true;
-      setSaveState('error');
-    }
-  };
+  const { saveState, setSaveState, markDirty } = useAutosave({
+    value: fields,
+    save: (value) => api.saveJournal(slug, value),
+    saveOnLeave: (value) => api.saveJournalOnLeave(slug, value),
+  });
 
   const change = (patch: Partial<Fields>) => {
-    dirty.current = true;
-    setSaveState('idle');
+    markDirty();
     setFields((f) => ({ ...f, ...patch }));
   };
 
-  useEffect(() => {
-    if (!dirty.current) return;
-    const t = setTimeout(() => void save(), 800);
-    return () => clearTimeout(t);
-  }, [fields]);
-
-  useEffect(() => {
-    const flush = () => {
-      if (!dirty.current) return;
-      dirty.current = false;
-      api.saveJournalOnLeave(slug, latest.current);
-    };
-    const onHide = () => {
-      if (document.visibilityState === 'hidden') flush();
-    };
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', onHide);
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      document.removeEventListener('visibilitychange', onHide);
-      flush();
-    };
-  }, [slug]);
-
   const insert = (text: string) => {
     const ta = textareaRef.current;
-    const body = latest.current.bodyMd;
+    const body = fields.bodyMd;
     const start = ta?.selectionStart ?? body.length;
     const end = ta?.selectionEnd ?? body.length;
     change({ bodyMd: `${body.slice(0, start)}${text}${body.slice(end)}` });
