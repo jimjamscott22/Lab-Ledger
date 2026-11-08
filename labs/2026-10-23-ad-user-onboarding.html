@@ -1,28 +1,135 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Lab 01: AD User Onboarding</title>
-<style>body{font-family:sans-serif;max-width:760px;margin:24px auto;color:#222;background:#fff}.card{border:1px solid #ccc;padding:8px;margin:8px 0}.tag{background:#eef;padding:2px 6px;border-radius:4px}pre{background:#f4f4f4;padding:6px}</style>
-</head><body>
-<h1>Lab 01: AD User Onboarding</h1>
-<p><span class="tag">AD</span> <span class="tag">Users</span></p>
-<div class="card warn">Use the lab VM only.</div>
-<h2>Skill &amp; Scenario</h2><p>A new hire starts Monday and needs an account.</p>
-<h2>Time Estimate</h2><p>45–60 min</p>
-<h2>Prerequisites</h2><ul><li>Windows Server VM</li><li>Admin account</li></ul>
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lab 01 – AD User Onboarding with PowerShell</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:860px;margin:0 auto;padding:1.2rem;line-height:1.6;color:#1f2937;background:#f8fafc}
+h1{color:#0f3d75;margin-bottom:.2rem}h2{border-bottom:2px solid #cbd5e1;padding-bottom:.2rem;margin-top:2rem;color:#0f3d75}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:1rem 1.2rem;margin:1rem 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.ticket{border-left:5px solid #f59e0b}.warn{border-left:5px solid #dc2626;background:#fef2f2}
+.tag{display:inline-block;background:#e0ecff;color:#0f3d75;border-radius:999px;padding:.1rem .7rem;font-size:.85rem;margin-right:.3rem}
+pre{background:#0d1117;color:#e6edf3;padding:1rem;border-radius:8px;overflow-x:auto;font-size:.88rem}
+code{font-family:Consolas,Menlo,monospace}p code,li code{background:#e2e8f0;padding:0 .3rem;border-radius:4px}
+.step label{font-weight:600;font-size:1.05rem;cursor:pointer}.step input{transform:scale(1.3);margin-right:.5rem}
+details{background:#f1f5f9;border-radius:8px;padding:.6rem 1rem;margin:.6rem 0}summary{cursor:pointer;font-weight:600}
+@media(max-width:600px){body{padding:.7rem}pre{font-size:.78rem}}
+</style></head><body>
+<h1>Lab 01: Active Directory User Onboarding with PowerShell</h1>
+<p><span class="tag">Help Desk</span><span class="tag">Active Directory</span><span class="tag">PowerShell</span><span class="tag">⏱ 20–30 min</span></p>
+<div class="card warn"><strong>Lab only.</strong> Run these commands only on your isolated practice domain (<code>lab.local</code>). Never on a production or employer system.</div>
+
+<h2>Skill &amp; Scenario</h2>
+<p><strong>Skill:</strong> Create and manage AD objects (OU, security group, user), manage group membership, and handle password resets and lockouts using the ActiveDirectory PowerShell module.</p>
+<div class="card ticket"><strong>Ticket #10423 – Priority: Normal</strong><br>"Hi IT, our new Marketing Coordinator <b>Taylor Reed</b> starts Monday. Please create their account and give them access to the Marketing share. Thanks! — Dana, Marketing Manager"</div>
+
+<h2>Time Estimate</h2><p>20–30 minutes (plus ~45 min one-time if you still need to build the DC).</p>
+
+<h2>Prerequisites (all free)</h2>
+<ul>
+<li>Hyper-V (Windows Pro) or VirtualBox.</li>
+<li>Windows Server 2022 <b>Evaluation</b> ISO (180-day, free from Microsoft Evaluation Center).</li>
+<li>A VM promoted to a domain controller for <code>lab.local</code>.</li>
+</ul>
+<details><summary>Not built yet? Quick DC setup</summary>
+<p>Install Server 2022 (Desktop Experience), set a static IP, rename it, then in an elevated PowerShell:</p>
+<pre><code>Rename-Computer -NewName DC01 -Restart
+Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+Install-ADDSForest -DomainName "lab.local" -DomainNetbiosName "LAB" -InstallDns
+# Enter a DSRM password when prompted; the server reboots as a DC.</code></pre></details>
+<p>Run everything below in an <b>elevated PowerShell</b> on DC01 (or RSAT on a domain-joined client).</p>
+
 <h2>Steps</h2>
-<div class="card step"><label><input type="checkbox"> Do 1 for ad-user-onboarding</label><pre>Get-Help 1</pre></div>
-<div class="card step"><label><input type="checkbox"> Do 2 for ad-user-onboarding</label><pre>Get-Help 2</pre></div>
-<div class="card step"><label><input type="checkbox"> Do 3 for ad-user-onboarding</label><pre>Get-Help 3</pre></div>
-<div class="card step"><label><input type="checkbox"> Do 4 for ad-user-onboarding</label><pre>Get-Help 4</pre></div>
-<div class="card step"><label><input type="checkbox"> Do 5 for ad-user-onboarding</label><pre>Get-Help 5</pre></div>
-<div class="card step"><label><input type="checkbox"> Do 6 for ad-user-onboarding</label><pre>Get-Help 6</pre></div>
+<div class="card step"><label><input type="checkbox">1. Load the module &amp; confirm the domain</label>
+<pre><code>Import-Module ActiveDirectory
+Get-ADDomain | Select-Object DNSRoot, DistinguishedName</code></pre>
+<p>Expect <code>lab.local</code> / <code>DC=lab,DC=local</code>.</p></div>
+
+<div class="card step"><label><input type="checkbox">2. Create the Marketing OU</label>
+<pre><code>New-ADOrganizationalUnit -Name "Marketing" -Path "DC=lab,DC=local" `
+  -Description "Marketing department users and groups" `
+  -ProtectedFromAccidentalDeletion $true</code></pre></div>
+
+<div class="card step"><label><input type="checkbox">3. Create the security group for the share</label>
+<pre><code>New-ADGroup -Name "GG_Marketing_Share_RW" -SamAccountName "GG_Marketing_Share_RW" `
+  -GroupCategory Security -GroupScope Global `
+  -Path "OU=Marketing,DC=lab,DC=local" `
+  -Description "Read/Write access to \\fileserver\Marketing"</code></pre>
+<p>Tip: in real life you'd grant NTFS/share permissions to this group, never to individual users.</p></div>
+
+<div class="card step"><label><input type="checkbox">4. Create the new user (password typed securely)</label>
+<pre><code>New-ADUser -Name "Taylor Reed" -GivenName "Taylor" -Surname "Reed" `
+  -SamAccountName "treed" -UserPrincipalName "treed@lab.local" `
+  -DisplayName "Taylor Reed" -Title "Marketing Coordinator" -Department "Marketing" `
+  -Path "OU=Marketing,DC=lab,DC=local" `
+  -AccountPassword (Read-Host -AsSecureString "Initial password") `
+  -ChangePasswordAtLogon $true -Enabled $true</code></pre>
+<p>Use a password that meets domain complexity (e.g., 12+ chars, mixed types) or the command fails.</p></div>
+
+<div class="card step"><label><input type="checkbox">5. Add the user to the group</label>
+<pre><code>Add-ADGroupMember -Identity "GG_Marketing_Share_RW" -Members "treed"</code></pre></div>
+
+<div class="card step"><label><input type="checkbox">6. Simulate a follow-up ticket: "I forgot my password and I'm locked out"</label>
+<p>Optionally trigger a lockout first by failing logon as <code>LAB\treed</code> from a client (if a lockout policy is set). Then:</p>
+<pre><code># Check lock status
+Get-ADUser treed -Properties LockedOut, BadLogonCount, LastBadPasswordAttempt |
+  Select-Object SamAccountName, LockedOut, BadLogonCount, LastBadPasswordAttempt
+
+# Reset the password and force change at next logon
+Set-ADAccountPassword -Identity treed -Reset `
+  -NewPassword (Read-Host -AsSecureString "New temporary password")
+Set-ADUser -Identity treed -ChangePasswordAtLogon $true
+
+# Unlock the account
+Unlock-ADAccount -Identity treed</code></pre>
+<p>Help-desk habit: verify the caller's identity before any reset.</p></div>
+
 <h2>Verify It Worked</h2>
-<div><label><input type="checkbox"> Check 1 for ad-user-onboarding</label></div>
-<div><label><input type="checkbox"> Check 2 for ad-user-onboarding</label></div>
+<div class="card step"><label><input type="checkbox">7. Run the checks</label>
+<pre><code>Get-ADOrganizationalUnit -Filter 'Name -eq "Marketing"' |
+  Select-Object Name, DistinguishedName, ProtectedFromAccidentalDeletion
+
+Get-ADGroup GG_Marketing_Share_RW -Properties Description |
+  Select-Object Name, GroupCategory, GroupScope, Description
+
+Get-ADUser treed -Properties Title, Department, Enabled, LockedOut, PasswordLastSet, pwdLastSet, MemberOf |
+  Select-Object Name, UserPrincipalName, Title, Department, Enabled, LockedOut, PasswordLastSet, pwdLastSet, MemberOf
+
+Get-ADGroupMember GG_Marketing_Share_RW | Select-Object Name, SamAccountName</code></pre>
+<ul><li>OU exists and is protected = <code>True</code></li><li>Group is Security / Global</li><li>User is Enabled, not LockedOut, <code>pwdLastSet</code> = 0 (must change at logon), MemberOf lists the group</li></ul></div>
+
 <h2>Cleanup</h2>
-<div><label><input type="checkbox"> Remove 1 for ad-user-onboarding</label></div>
+<div class="card step"><label><input type="checkbox">8. Remove lab objects</label>
+<pre><code>Remove-ADUser -Identity treed -Confirm:$false
+Remove-ADGroup -Identity GG_Marketing_Share_RW -Confirm:$false
+
+# The OU is protected — this will fail with "Access is denied" until you clear the flag:
+Set-ADOrganizationalUnit -Identity "OU=Marketing,DC=lab,DC=local" -ProtectedFromAccidentalDeletion $false
+Remove-ADOrganizationalUnit -Identity "OU=Marketing,DC=lab,DC=local" -Recursive -Confirm:$false
+
+# Confirm it's gone (should return nothing)
+Get-ADOrganizationalUnit -Filter 'Name -eq "Marketing"'</code></pre></div>
+
 <h2>Interview Questions</h2>
-<details><summary>Question 1 for AD User Onboarding?</summary><p>Answer 1.</p></details>
-<details><summary>Question 2 for AD User Onboarding?</summary><p>Answer 2.</p></details>
-<details><summary>Question 3 for AD User Onboarding?</summary><p>Answer 3.</p></details>
-<h2>Stretch goal: script it</h2><p>Automate the onboarding with PowerShell.</p>
+<details><summary>1. A user says they're locked out. What do you check, and in what order?</summary><p>Verify identity, check <code>LockedOut</code>/<code>BadLogonCount</code>/<code>LastBadPasswordAttempt</code>, unlock, reset only if they forgot the password, and look for the lockout source (stale creds on phone, mapped drive, service) if it recurs.</p></details>
+<details><summary>2. Why assign share permissions to a group instead of the user?</summary><p>Scalability and auditability: onboarding/offboarding is a single membership change, permissions stay consistent, and it follows AGDLP/RBAC best practice.</p></details>
+<details><summary>3. What's the difference between Global and Domain Local group scope?</summary><p>Global groups hold users from their own domain (role groups); Domain Local groups are used to grant permissions on resources in their domain and can contain globals from any trusted domain (AGDLP).</p></details>
+
+<h2>Stretch Goal: Bulk Create from CSV</h2>
+<div class="card step"><label><input type="checkbox">9. Onboard several hires at once</label>
+<p>Save as <code>C:\Lab\newhires.csv</code>:</p>
+<pre><code>First,Last,Sam,Title
+Jordan,Lee,jlee,Content Writer
+Morgan,Diaz,mdiaz,SEO Specialist
+Casey,Park,cpark,Graphic Designer</code></pre>
+<pre><code>$pw = Read-Host -AsSecureString "Temp password for all new hires"
+Import-Csv C:\Lab\newhires.csv | ForEach-Object {
+    New-ADUser -Name "$($_.First) $($_.Last)" -GivenName $_.First -Surname $_.Last `
+      -SamAccountName $_.Sam -UserPrincipalName "$($_.Sam)@lab.local" `
+      -Title $_.Title -Department "Marketing" `
+      -Path "OU=Marketing,DC=lab,DC=local" `
+      -AccountPassword $pw -ChangePasswordAtLogon $true -Enabled $true
+    Add-ADGroupMember -Identity "GG_Marketing_Share_RW" -Members $_.Sam
+    Write-Host "Created $($_.Sam)"
+}</code></pre>
+<p>Bonus: add <code>-WhatIf</code> for a dry run, and wrap in <code>try/catch</code> to log failures. Run this before cleanup (or recreate the OU/group first).</p></div>
+<p style="text-align:center;color:#64748b;margin-top:2rem">Lab 01 of the IT Admin Practice Series · 2026-10-23</p>
 </body></html>

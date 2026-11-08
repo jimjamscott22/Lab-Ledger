@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Lab 05: Build a Help Desk PC Info Tool in PowerShell</title></head>
+<body style="margin:0;background:#f4f6f9;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;line-height:1.55">
+<div style="max-width:860px;margin:30px auto;background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden">
+<div style="background:linear-gradient(135deg,#0b3d91,#2563eb);color:#fff;padding:28px 34px">
+<div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.85">Lab Rat &middot; Lab 05 &middot; Tue Oct 27, 2026</div>
+<h1 style="margin:6px 0 4px;font-size:28px">Build a Help Desk &ldquo;PC Info&rdquo; Tool in PowerShell</h1>
+<div style="opacity:.9">Track: PowerShell &middot; Builds on Lab 04 (same Windows 11 eval VM; turns your triage checks into a reusable function)</div>
+</div>
+<div style="padding:26px 34px">
+
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+<span style="background:#e0ecff;color:#0b3d91;padding:5px 12px;border-radius:20px;font-size:14px">&#9201; 25&ndash;30 min</span>
+<span style="background:#e6f7ee;color:#166534;padding:5px 12px;border-radius:20px;font-size:14px">Level: Entry+</span>
+<span style="background:#fff4e0;color:#92400e;padding:5px 12px;border-radius:20px;font-size:14px">Skill: CIM queries, functions, parameters, pipeline, try/catch, CSV export</span>
+</div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">The ticket</h2>
+<div style="background:#f8fafc;border-left:4px solid #2563eb;padding:12px 16px;border-radius:4px;font-family:Consolas,monospace;font-size:14px">
+<b>REQ-0074</b> &middot; Priority: P4 (internal)<br>
+From: Dana (IT Lead) &lt;dana@contoso.lab&gt;<br>
+&ldquo;Every time someone calls in, Tier 1 spends five minutes clicking around to find the hostname, OS build, uptime, free disk, IP, and who's logged in. Can you write us one command that grabs all of that, works on more than one PC, and doesn't blow up when a machine is offline?&rdquo;
+</div>
+<p>This is how junior admins get noticed: you take a manual checklist (like yesterday's slow-PC triage) and turn it into a tool the whole desk can use. You'll build an advanced function, <code>Get-PCInfo</code>, that returns clean objects, accepts pipeline input, handles failures gracefully, and exports to CSV.</p>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Prerequisites (all free)</h2>
+<ul>
+<li>Your <b>Windows 11 Enterprise evaluation</b> VM from Labs 03&ndash;04 (Hyper-V or VirtualBox). Take a fresh checkpoint first, named <code>pre-lab05</code>.</li>
+<li>Windows PowerShell 5.1 (built in) or free <b>PowerShell 7</b>. Free <b>VS Code</b> with the PowerShell extension is nice, but Notepad works.</li>
+<li>Optional: your Lab 01 <b>Windows Server eval</b> DC running, if you want to test against a second machine.</li>
+</ul>
+<p style="background:#fef2f2;border-left:4px solid #dc2626;padding:10px 14px;border-radius:4px;font-size:14px">Run everything inside your lab VM only, never on your own PC or anyone else's network.</p>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Steps</h2>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>1. Set up a workspace and allow local scripts</b></label>
+<p style="margin:6px 0 6px 24px">Open PowerShell as admin in the VM. <code>RemoteSigned</code> lets your own local scripts run while still blocking unsigned downloaded ones.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>New-Item -ItemType Directory -Path C:\Lab05 -Force | Out-Null
+Set-Location C:\Lab05
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+Get-ExecutionPolicy -List</code></pre></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>2. Explore the raw data with CIM one piece at a time</b></label>
+<p style="margin:6px 0 6px 24px">Before writing a tool, find where each fact lives. CIM (the modern replacement for <code>Get-WmiObject</code>) is your best friend here.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Get-CimInstance Win32_OperatingSystem | Select-Object CSName, Caption, BuildNumber, LastBootUpTime
+Get-CimInstance Win32_ComputerSystem  | Select-Object Manufacturer, Model, UserName, TotalPhysicalMemory
+Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'" | Select-Object DeviceID, Size, FreeSpace
+Get-CimInstance Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True" | Select-Object Description, IPAddress, DNSServerSearchOrder</code></pre>
+<p style="margin:6px 0 0 24px">Notice sizes are in raw bytes and <code>IPAddress</code> is an array. You'll clean both up.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>3. Write the function</b></label>
+<p style="margin:6px 0 6px 24px">Save this as <code>C:\Lab05\PCInfo.ps1</code> (<code>notepad C:\Lab05\PCInfo.ps1</code>). Read it before you run it: every line is something you could be asked about.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>function Get-PCInfo {
+    &lt;#
+    .SYNOPSIS
+        Tier 1 snapshot: hostname, OS, uptime, disk, RAM, IP, logged-on user.
+    .EXAMPLE
+        Get-PCInfo -ComputerName localhost, PC-404
+    #&gt;
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('Name','CN')]
+        [string[]]$ComputerName = $env:COMPUTERNAME
+    )
+    process {
+        foreach ($pc in $ComputerName) {
+            Write-Verbose "Querying $pc"
+            try {
+                $session = New-CimSession -ComputerName $pc -ErrorAction Stop
+                $os   = Get-CimInstance -CimSession $session Win32_OperatingSystem -ErrorAction Stop
+                $cs   = Get-CimInstance -CimSession $session Win32_ComputerSystem -ErrorAction Stop
+                $disk = Get-CimInstance -CimSession $session Win32_LogicalDisk -Filter "DeviceID='C:'"
+                $net  = Get-CimInstance -CimSession $session Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True"
+                $up   = (Get-Date) - $os.LastBootUpTime
+
+                [PSCustomObject]@{
+                    ComputerName = $os.CSName
+                    Status       = 'Online'
+                    OS           = $os.Caption
+                    Build        = $os.BuildNumber
+                    UptimeDays   = [math]::Round($up.TotalDays, 1)
+                    CFreeGB      = [math]::Round($disk.FreeSpace / 1GB, 1)
+                    CFreePct     = [math]::Round(($disk.FreeSpace / $disk.Size) * 100, 0)
+                    RAMGB        = [math]::Round($cs.TotalPhysicalMemory / 1GB, 1)
+                    IPv4         = ($net.IPAddress | Where-Object { $_ -match '^\d+\.' }) -join ', '
+                    LoggedOnUser = $cs.UserName
+                }
+                Remove-CimSession $session
+            }
+            catch {
+                [PSCustomObject]@{
+                    ComputerName = $pc
+                    Status       = "Failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+                    OS = $null; Build = $null; UptimeDays = $null; CFreeGB = $null
+                    CFreePct = $null; RAMGB = $null; IPv4 = $null; LoggedOnUser = $null
+                }
+            }
+        }
+    }
+}</code></pre></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>4. Dot-source it and run against the local machine</b></label>
+<p style="margin:6px 0 6px 24px">Dot-sourcing (the leading <code>. </code>) loads the function into your current session.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>. C:\Lab05\PCInfo.ps1
+Get-PCInfo
+Get-PCInfo -Verbose | Format-List
+Get-Help Get-PCInfo -Examples</code></pre></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>5. Break it on purpose: an offline machine</b></label>
+<p style="margin:6px 0 6px 24px">A good tool reports a failure as data instead of stopping the whole run. <code>PC-404</code> doesn't exist; it should come back as a <code>Failed</code> row while <code>localhost</code> still succeeds.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Get-PCInfo -ComputerName localhost, PC-404 | Format-Table ComputerName, Status, UptimeDays, CFreePct</code></pre>
+<p style="margin:6px 0 0 24px">Now see why <code>-ErrorAction Stop</code> matters: temporarily delete it from the <code>New-CimSession</code> line, re-dot-source, and run again. The error prints in red, but <code>catch</code> never fires because the error was non-terminating. Put it back.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>6. Use the pipeline and a text list of PCs</b></label>
+<p style="margin:6px 0 6px 24px">This is how Tier 1 would actually use it: a list of machines from a ticket or an AD query.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>"localhost`n$env:COMPUTERNAME`nPC-404" | Set-Content C:\Lab05\pcs.txt
+Get-Content C:\Lab05\pcs.txt | Get-PCInfo | Format-Table -AutoSize
+
+# Only show machines that need attention
+Get-Content C:\Lab05\pcs.txt | Get-PCInfo |
+    Where-Object { $_.Status -ne 'Online' -or $_.CFreePct -lt 20 -or $_.UptimeDays -gt 14 }</code></pre>
+<p style="margin:6px 0 0 24px">If your Lab 01 DC is up and the VM is domain-joined, also try <code>Get-ADComputer -Filter * | Get-PCInfo</code>. That's what <code>ValueFromPipelineByPropertyName</code> plus the <code>Name</code> alias buys you.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>7. Export a report you could attach to a ticket</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>$stamp = Get-Date -Format 'yyyy-MM-dd_HHmm'
+Get-Content C:\Lab05\pcs.txt | Get-PCInfo |
+    Export-Csv -Path "C:\Lab05\PCInfo_$stamp.csv" -NoTypeInformation
+Import-Csv "C:\Lab05\PCInfo_$stamp.csv" | Format-Table</code></pre></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Verify it worked</h2>
+<ul style="list-style:none;padding-left:0">
+<li><label><input type="checkbox"> <code>Get-PCInfo</code> returns one object with every field filled in for your VM, and <code>UptimeDays</code> matches what Task Manager shows.</label></li>
+<li><label><input type="checkbox"> <code>PC-404</code> appears as a row with <code>Status</code> starting with <code>Failed:</code>, and the run does not stop.</label></li>
+<li><label><input type="checkbox"> <code>(Get-PCInfo | Get-Member).TypeName[0]</code> shows <code>System.Management.Automation.PSCustomObject</code>, which means you're outputting objects, not text.</label></li>
+<li><label><input type="checkbox"> The CSV opens with headers and no <code>#TYPE</code> line at the top.</label></li>
+<li><label><input type="checkbox"> <code>Get-Help Get-PCInfo -Examples</code> shows your comment-based help.</label></li>
+</ul>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Cleanup</h2>
+<div style="margin:14px 0"><label><input type="checkbox"> <b>8. Reset the VM</b></label>
+<p style="margin:6px 0 6px 24px">Copy <code>PCInfo.ps1</code> out to a GitHub repo or notes first if you want to keep it (it's a nice portfolio piece). Then:</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Remove-Item C:\Lab05 -Recurse -Force
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Undefined -Force
+Get-CimSession | Remove-CimSession</code></pre>
+<p style="margin:6px 0 0 24px">Or just revert to the <code>pre-lab05</code> checkpoint.</p></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Interview questions</h2>
+<ol>
+<li><b>Why should a PowerShell function output objects instead of formatted text?</b> <span style="color:#64748b">(Objects can be piped to Where-Object, Sort-Object, Export-Csv, and other commands. Format-Table output is display-only, so you put formatting last, if at all.)</span></li>
+<li><b>What's the difference between a terminating and non-terminating error, and how does that affect try/catch?</b> <span style="color:#64748b">(Non-terminating errors write to the error stream and keep going, so catch never sees them. Adding -ErrorAction Stop, or setting $ErrorActionPreference, turns them into terminating errors that catch can handle.)</span></li>
+<li><b>Get-WmiObject vs Get-CimInstance: which would you use and why?</b> <span style="color:#64748b">(Get-CimInstance. It uses WS-Man by default, works through firewalls that allow WinRM, supports reusable CIM sessions, and works in PowerShell 7. Get-WmiObject uses DCOM and was removed in PowerShell 7.)</span></li>
+</ol>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Stretch goal (optional)</h2>
+<p>Turn <code>PCInfo.ps1</code> into a module: rename it <code>PCInfo.psm1</code>, put it in <code>$HOME\Documents\WindowsPowerShell\Modules\PCInfo\</code>, and confirm <code>Get-PCInfo</code> autoloads in a new window. Then add a <code>-PendingReboot</code> switch that checks <code>HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired</code> and adds a <code>RebootPending</code> column. Extra nerd points: write one Pester test that asserts <code>PC-404</code> returns a <code>Failed</code> status.</p>
+
+<p style="margin-top:28px;font-size:13px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:12px">Lab Rat &middot; Lab 05 &middot; Run everything inside your own lab VM only. Next up: Linux admin.</p>
+</div></div></body></html>

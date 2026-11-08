@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Lab 06: Linux Users, Shared Folders &amp; Least-Privilege sudo</title></head>
+<body style="margin:0;background:#f4f6f9;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;line-height:1.55">
+<div style="max-width:860px;margin:30px auto;background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden">
+<div style="background:linear-gradient(135deg,#0b3d91,#2563eb);color:#fff;padding:28px 34px">
+<div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.85">Lab Rat &middot; Lab 06 &middot; Wed Oct 28, 2026</div>
+<h1 style="margin:6px 0 4px;font-size:28px">Linux Users, Shared Folders &amp; Least-Privilege sudo</h1>
+<div style="opacity:.9">Track: Linux admin &middot; The Linux mirror of Lab 01 (AD onboarding) and Lab 02 (offboarding), on a disposable Ubuntu box</div>
+</div>
+<div style="padding:26px 34px">
+
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+<span style="background:#e0ecff;color:#0b3d91;padding:5px 12px;border-radius:20px;font-size:14px">&#9201; 25&ndash;30 min</span>
+<span style="background:#e6f7ee;color:#166534;padding:5px 12px;border-radius:20px;font-size:14px">Level: Entry+</span>
+<span style="background:#fff4e0;color:#92400e;padding:5px 12px;border-radius:20px;font-size:14px">Skill: useradd/chage, groups, chmod &amp; setgid, ACLs, sudoers, offboarding</span>
+</div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">The ticket</h2>
+<div style="background:#f8fafc;border-left:4px solid #2563eb;padding:12px 16px;border-radius:4px;font-family:Consolas,monospace;font-size:14px">
+<b>INC-1106</b> &middot; Priority: P3<br>
+From: Priya Shah (Marketing) &lt;pshah@contoso.lab&gt;<br>
+&ldquo;Day one and I can't save anything to the marketing folder on filesrv01, it just says Permission denied. Also my manager says Tom left and asked if you can make sure he can't get in anymore. Oh, and can the help desk reset our passwords without bugging the Linux guy?&rdquo;
+</div>
+<p>Three tickets in one, which is very realistic. You'll onboard users, fix a broken shared folder (twice, because the first fix reveals a second bug), set up a least-privilege sudo rule for Tier 1, and offboard a leaver without destroying their files. Same lifecycle you did in AD and Entra, now on Linux.</p>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Prerequisites (all free)</h2>
+<ul>
+<li><b>Docker</b> on any lab host (Docker Desktop, or Docker on your Pi). The <code>ubuntu:24.04</code> image is free and runs on ARM and x86.</li>
+<li>No Docker handy? A free <b>Ubuntu Server 24.04</b> VM in Hyper-V or VirtualBox works identically; just snapshot it first.</li>
+<li>Comfort with a bash prompt. That's it.</li>
+</ul>
+<p style="background:#fef2f2;border-left:4px solid #dc2626;padding:10px 14px;border-radius:4px"><b>Safety:</b> run everything inside the <code>lab06</code> container (prompt shows <code>root@filesrv01</code>). Do <b>not</b> run these commands directly on your Pi host; it runs Pi-hole, Vaultwarden, and friends, and a bad sudoers file there is a bad afternoon.</p>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Steps</h2>
+<div style="margin:14px 0"><label><input type="checkbox"> <b>1. Spin up a throwaway &ldquo;file server&rdquo; container</b></label>
+<p>Everything happens inside a disposable Ubuntu container, so nothing on your Pi or PC changes. Run this from Docker Desktop's terminal or any Docker host in your lab:</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>docker run -it --rm --name lab06 --hostname filesrv01 ubuntu:24.04 bash</code></pre>
+<p>You're now root inside the container. Install the few tools the base image leaves out:</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>apt-get update &amp;&amp; apt-get install -y sudo acl
+cat /etc/os-release | head -2</code></pre></div>
+<div style="margin:14px 0"><label><input type="checkbox"> <b>2. Onboard two marketing users</b></label>
+<p>Create the team group, then the users with home directories, a bash shell, a full name in the comment field, and group membership:</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>groupadd marketing
+useradd -m -s /bin/bash -c &quot;Priya Shah&quot; -G marketing pshah
+useradd -m -s /bin/bash -c &quot;Tom Lee&quot;   -G marketing tlee
+echo &#x27;pshah:Welcome-Lab06!&#x27; | chpasswd
+echo &#x27;tlee:Welcome-Lab06!&#x27;  | chpasswd</code></pre>
+<div style="background:#ecfdf5;border-left:4px solid #16a34a;padding:10px 14px;border-radius:4px;margin:8px 0"><b>&#10003; Verify:</b> <code>id pshah</code> lists <code>marketing</code>, <code>getent group marketing</code> shows both users, and <code>chage -l pshah</code> shows the password details. (In production you'd also run <code>chage -d 0 pshah</code> to force a change at first login. We'll do that in step 8, because it would make every <code>su - pshah</code> test below stop and demand a new password.)</div></div>
+<div style="margin:14px 0"><label><input type="checkbox"> <b>3. Reproduce the ticket</b></label>
+<p>Build the share the way someone rushed it into production, then test as Priya. <code>su - user -c</code> runs one command as that user without needing their password, because you're root.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>mkdir -p /srv/marketing
+ls -ld /srv/marketing
+su - pshah -c &#x27;touch /srv/marketing/q4-plan.txt&#x27;</code></pre>
+<div style="background:#ecfdf5;border-left:4px solid #16a34a;padding:10px 14px;border-radius:4px;margin:8px 0"><b>&#10003; Verify:</b> You get <code>Permission denied</code>. Read the <code>ls -ld</code> output: owner <code>root</code>, group <code>root</code>, mode <code>drwxr-xr-x</code>. Priya is &ldquo;other&rdquo;, and other has no write bit. That's your root cause.</div></div>
+<div style="margin:14px 0"><label><input type="checkbox"> <b>4. Fix it with group ownership and the setgid bit</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>chgrp marketing /srv/marketing
+chmod 2770 /srv/marketing
+ls -ld /srv/marketing
+su - pshah -c &#x27;echo &quot;Q4 launch ideas&quot; &gt; /srv/marketing/q4-plan.txt&#x27;
+ls -l /srv/marketing</code></pre>
+<p><code>2770</code> means setgid (2), owner rwx (7), group rwx (7), other nothing (0). The setgid bit on a directory makes new files inherit the <b>directory's group</b> instead of the creator's primary group.</p>
+<div style="background:#ecfdf5;border-left:4px solid #16a34a;padding:10px 14px;border-radius:4px;margin:8px 0"><b>&#10003; Verify:</b> The directory shows <code>drwxrws---</code> (note the <code>s</code>), and <code>q4-plan.txt</code> is group <code>marketing</code>, not <code>pshah</code>.</div></div>
+<div style="margin:14px 0"><label><input type="checkbox"> <b>5. Hit the second bug: teammates can't edit each other's files</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>su - tlee -c &#x27;echo &quot;add webinar&quot; &gt;&gt; /srv/marketing/q4-plan.txt&#x27;</code></pre>
+<p>Denied again. Run <code>ls -l /srv/marketing</code>: the file is <code>-rw-r--r--</code>, because Priya's umask (<code>022</code>) stripped group write. Classic &ldquo;I can open it but can't save it&rdquo; ticket. Fix the existing file, then add a <b>default ACL</b> so every future file is group-writable regardless of anyone's umask:</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>setfacl -m g:marketing:rw /srv/marketing/q4-plan.txt
+setfacl -m g:marketing:rwx /srv/marketing
+setfacl -d -m g:marketing:rwx /srv/marketing
+getfacl /srv/marketing</code></pre>
+<p>If <code>setfacl</code> says <i>Operation not supported</i>, your Docker storage doesn't support ACLs; repeat this lab in an Ubuntu Server VM instead, or use the fallback <code>chmod g+w</code> on the file and set <code>umask 002</code> in each user's <code>~/.profile</code>.</p>
+<div style="background:#ecfdf5;border-left:4px solid #16a34a;padding:10px 14px;border-radius:4px;margin:8px 0"><b>&#10003; Verify:</b> <code>getfacl</code> shows a <code>default:group:marketing:rwx</code> line. Then run <code>su - tlee -c 'echo "add webinar" &gt;&gt; /srv/marketing/q4-plan.txt'</code> (works now) and <code>su - tlee -c 'touch /srv/marketing/budget.txt'</code>, then <code>su - pshah -c 'echo edit &gt;&gt; /srv/marketing/budget.txt'</code>. Both succeed, and <code>ls -l</code> shows a <code>+</code> after the mode bits, meaning an ACL is present.</div></div>
+<div style="margin:14px 0"><label><input type="checkbox"> <b>6. Give the help desk least-privilege sudo</b></label>
+<p>Tier 1 should be able to reset user passwords and check expiry, but not become root. Create a tech account and a sudoers drop-in, and <b>always</b> syntax-check it before it goes live; a broken sudoers file can lock out every admin.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>groupadd helpdesk
+useradd -m -s /bin/bash -G helpdesk hdtech
+echo &#x27;hdtech:Tier1-Lab06!&#x27; | chpasswd
+
+cat &gt; /etc/sudoers.d/helpdesk &lt;&lt;&#x27;EOF&#x27;
+# Tier 1: reset passwords for normal users and read expiry info only
+%helpdesk ALL=(root) /usr/bin/passwd [a-z]*, !/usr/bin/passwd root, /usr/bin/chage -l *
+EOF
+chmod 440 /etc/sudoers.d/helpdesk
+visudo -cf /etc/sudoers.d/helpdesk</code></pre>
+<div style="background:#ecfdf5;border-left:4px solid #16a34a;padding:10px 14px;border-radius:4px;margin:8px 0"><b>&#10003; Verify:</b> <code>visudo</code> prints <code>parsed OK</code>. Then test as the tech (sudo asks for <i>hdtech's</i> password, <code>Tier1-Lab06!</code>):</div>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>su - hdtech
+sudo -l                    # lists exactly the three rules
+sudo chage -l pshah        # allowed
+sudo passwd pshah          # allowed: set a new temp password
+sudo passwd root           # denied
+sudo cat /etc/shadow       # denied
+sudo -i                    # denied
+exit</code></pre>
+<div style="background:#fffbeb;border-left:4px solid #d97706;padding:10px 14px;border-radius:4px;margin:8px 0"><b>Why it matters:</b> Each denial is logged. On a real server you'd see them in <code>/var/log/auth.log</code> or <code>journalctl _COMM=sudo</code>, which is exactly where you look when someone says &ldquo;sudo isn't working.&rdquo;</div></div>
+<div style="margin:14px 0"><label><input type="checkbox"> <b>7. Offboard Tom without deleting his work</b></label>
+<p>HR says Tom's last day was Friday. Lock the account, expire it, kill interactive logins, remove his access, and hand his files to his manager. Don't <code>userdel -r</code> on day one; legal or the team may need his data.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>usermod -L tlee                       # lock the password
+chage -E 0 tlee                       # expire the account
+usermod -s /usr/sbin/nologin tlee     # no interactive shell
+gpasswd -d tlee marketing             # remove from the share group
+find /srv/marketing -user tlee -ls    # what did he own?
+find /srv/marketing -user tlee -exec chown pshah {} \;</code></pre>
+<div style="background:#ecfdf5;border-left:4px solid #16a34a;padding:10px 14px;border-radius:4px;margin:8px 0"><b>&#10003; Verify:</b> <code>passwd -S tlee</code> shows <code>L</code> (locked), <code>chage -l tlee</code> shows the account expired, <code>id tlee</code> no longer lists <code>marketing</code>, <code>su - tlee</code> is refused (expired account or <i>This account is currently not available</i>), and <code>find /srv/marketing -user tlee</code> returns nothing.</div></div>
+<div style="margin:14px 0"><label><input type="checkbox"> <b>8. Write the ticket note</b></label>
+<p>Close it like a pro. Paste this into a file (or your notes app) and fill in the blanks in your own words:</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>cat &gt; /root/INC-1106-resolution.txt &lt;&lt;&#x27;EOF&#x27;
+INC-1106 | Marketing share write access | Resolved
+Symptom: New hire pshah got &quot;Permission denied&quot; writing to /srv/marketing.
+Cause: Share owned root:root 755; marketing group had no write access.
+       Second issue: default umask 022 made new files read-only to teammates.
+Fix: chgrp marketing + chmod 2770 (setgid), default ACL g:marketing:rwx.
+Also: helpdesk sudo rule added (passwd/chage -l only), validated with visudo -c.
+      tlee offboarded per HR: locked, expired, nologin, removed from group, files -&gt; pshah.
+Verified: pshah and tlee (before offboarding) could create and edit each other&#x27;s files.
+EOF
+cat /root/INC-1106-resolution.txt
+chage -d 0 pshah     # hand-off: force a new password at first real login
+chage -l pshah | head -1</code></pre></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Final verify checklist</h2>
+<ul style="list-style:none;padding-left:0">
+<li><label><input type="checkbox"> <code>ls -ld /srv/marketing</code> shows <code>drwxrws---+ root marketing</code></label></li>
+<li><label><input type="checkbox"> <code>getfacl /srv/marketing</code> has a <code>default:group:marketing:rwx</code> entry</label></li>
+<li><label><input type="checkbox"> <code>visudo -c</code> reports every file <code>parsed OK</code>, and <code>hdtech</code> cannot run <code>sudo -i</code></label></li>
+<li><label><input type="checkbox"> <code>passwd -S tlee</code> shows <code>L</code>, and <code>tlee</code> is out of <code>marketing</code></label></li>
+<li><label><input type="checkbox"> Your INC-1106 note explains cause, fix, and verification in plain English</label></li>
+</ul>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Cleanup</h2>
+<p><label><input type="checkbox"> Type <code>exit</code> to leave the container. Because you started it with <code>--rm</code>, Docker deletes it automatically. Confirm and optionally reclaim the image:</label></p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>docker ps -a --filter name=lab06     # should list nothing
+docker image rm ubuntu:24.04          # optional</code></pre>
+<p>If you used a VM, revert to the snapshot you took before the lab.</p>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Interview questions</h2>
+<ol>
+<li><b>A user gets &ldquo;Permission denied&rdquo; on a shared directory. Walk me through how you'd troubleshoot.</b> <span style="color:#64748b">(Check <code>id user</code> for group membership, <code>ls -ld</code> on the directory <i>and every parent</i> since you need execute on each one, <code>getfacl</code> for ACLs, then test with <code>su - user -c</code>. Remember a user must log out and back in before a new group membership takes effect.)</span></li>
+<li><b>What does the setgid bit do on a directory, and how is it different from a default ACL?</b> <span style="color:#64748b">(setgid makes new files inherit the directory's group. It doesn't change permissions. A default ACL sets the permissions new files get, overriding the creator's umask for the named entries. Shared folders usually want both.)</span></li>
+<li><b>Why edit sudoers with visudo, and what's risky about wildcards in a rule?</b> <span style="color:#64748b">(visudo locks the file and syntax-checks before saving, so a typo can't break sudo for everyone. Wildcards match arguments, including extra ones and spaces, so a loose rule like <code>/usr/bin/vim *</code> or <code>/bin/cp *</code> can be abused to edit or overwrite any file and escalate to root. Grant specific commands and arguments, and prefer tools that can't spawn a shell.)</span></li>
+</ol>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Stretch goal (optional)</h2>
+<p>Script it. Write <code>/root/onboard.sh</code> that takes a username, full name, and group, creates the user with a random temp password (<code>openssl rand -base64 12</code>, install <code>openssl</code> first), forces a change at first login, and prints a one-line summary. Add a matching <code>offboard.sh</code> that does step 7 and logs what it changed to <code>/var/log/offboard.log</code>. Extra nerd points: make both scripts refuse to run unless <code>$EUID</code> is 0, and run <code>shellcheck</code> on them (free, <code>apt-get install -y shellcheck</code>).</p>
+
+<p style="margin-top:28px;font-size:13px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:12px">Lab Rat &middot; Lab 06 &middot; Run everything inside your own lab container or VM only. Next up: networking.</p>
+</div></div></body></html>

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Lab 04: Triage a "My PC Is So Slow" Ticket on Windows 11</title></head>
+<body style="margin:0;background:#f4f6f9;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;line-height:1.55">
+<div style="max-width:860px;margin:30px auto;background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden">
+<div style="background:linear-gradient(135deg,#0b3d91,#2563eb);color:#fff;padding:28px 34px">
+<div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.85">Lab Rat &middot; Lab 04 &middot; Mon Oct 26, 2026</div>
+<h1 style="margin:6px 0 4px;font-size:28px">Triage a &ldquo;My PC Is So Slow&rdquo; Ticket on Windows 11</h1>
+<div style="opacity:.9">Track: Windows troubleshooting &middot; Builds on Lab 03 (reuses your Windows 11 eval VM and its clean checkpoint)</div>
+</div>
+<div style="padding:26px 34px">
+
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+<span style="background:#e0ecff;color:#0b3d91;padding:5px 12px;border-radius:20px;font-size:14px">&#9201; 25&ndash;30 min</span>
+<span style="background:#e6f7ee;color:#166534;padding:5px 12px;border-radius:20px;font-size:14px">Level: Entry</span>
+<span style="background:#fff4e0;color:#92400e;padding:5px 12px;border-radius:20px;font-size:14px">Skill: performance triage, disk cleanup, event logs, SFC/DISM</span>
+</div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">The ticket</h2>
+<div style="background:#f8fafc;border-left:4px solid #2563eb;padding:12px 16px;border-radius:4px;font-family:Consolas,monospace;font-size:14px">
+<b>INC-0061</b> &middot; Priority: P3<br>
+From: Marcus (Accounting) &lt;marcus@contoso.lab&gt;<br>
+&ldquo;My computer has been super slow since last week. The fan is always loud, Excel takes forever to open, and I got a pop-up saying I'm low on disk space. I already restarted twice.&rdquo;
+</div>
+<p>&ldquo;Slow PC&rdquo; is the single most common desktop support ticket, and it's vague on purpose. Today you plant three real causes on your VM (a CPU hog, a startup item, and a disk filler), then find each one with the same methodical checks you'd run on a live remote session: CPU, memory, disk, startup, logs, system file health.</p>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Prerequisites (all free)</h2>
+<ul>
+<li>Your <b>Windows 11 Enterprise evaluation</b> VM from Lab 03 (Hyper-V or VirtualBox). Revert it to the clean checkpoint, then <b>take a new checkpoint</b> called <code>pre-lab04</code>.</li>
+<li>At least <b>6 GB free</b> on the VM's C: drive (we'll fill 3&ndash;4 GB on purpose).</li>
+<li>Windows PowerShell or PowerShell 7, run <b>as Administrator</b> inside the VM. Everything happens inside the VM, never on your real PC.</li>
+</ul>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Part A: Break it (5 min)</h2>
+<p style="font-size:14px;color:#475569">You're the &ldquo;user&rdquo; for a minute. Pretend you didn't see this part when you get to Part B.</p>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>1. Plant a runaway background process</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>New-Item -ItemType Directory -Path C:\ProgramData\SyncHelper -Force | Out-Null
+Set-Content C:\ProgramData\SyncHelper\synchelper.ps1 'while ($true) { [math]::Sqrt((Get-Random)) | Out-Null }'
+Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File C:\ProgramData\SyncHelper\synchelper.ps1'</code></pre>
+<p style="font-size:14px;color:#475569">This pins one CPU core, just like a stuck sync client or a broken updater.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>2. Make it come back at every logon</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'SyncHelper' `
+  -Value 'powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File C:\ProgramData\SyncHelper\synchelper.ps1' -Force</code></pre>
+<p style="font-size:14px;color:#475569">That's why &ldquo;I already restarted twice&rdquo; didn't help.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>3. Fill the disk with junk</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>$junk = "$env:LOCALAPPDATA\Temp\ExcelCache"
+New-Item -ItemType Directory -Path $junk -Force | Out-Null
+1..3 | ForEach-Object { fsutil file createnew "$junk\cache_$_.tmp" 1GB }</code></pre>
+<p style="font-size:14px;color:#475569"><code>fsutil file createnew</code> allocates the space instantly. Adjust the count if your VM disk is small.</p></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Part B: Troubleshoot it (15&ndash;20 min)</h2>
+<p style="font-size:14px;color:#475569">Now you're the tech on a remote session. Work the checks in order and jot findings as you go; you'll need them for the ticket note.</p>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>4. Get the baseline: uptime, OS build, free space</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Get-CimInstance Win32_OperatingSystem |
+  Select-Object Caption, BuildNumber, LastBootUpTime,
+    @{n='FreeRAM_GB';e={[math]::Round($_.FreePhysicalMemory/1MB,2)}}
+
+Get-Volume -DriveLetter C |
+  Select-Object DriveLetter, @{n='Size_GB';e={[math]::Round($_.Size/1GB,1)}},
+    @{n='Free_GB';e={[math]::Round($_.SizeRemaining/1GB,1)}}</code></pre>
+<p style="font-size:14px;color:#475569">Always check uptime first. Users say &ldquo;I restarted&rdquo; when they mean &ldquo;I closed the lid.&rdquo; (Fast Startup also means Shut down isn't a real restart.)</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>5. Find the CPU hog</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code># Live CPU % per process (sampled over 2 seconds)
+Get-Counter '\Process(*)\% Processor Time' -SampleInterval 2 -MaxSamples 1 |
+  Select-Object -ExpandProperty CounterSamples |
+  Where-Object { $_.InstanceName -notin '_total','idle' } |
+  Sort-Object CookedValue -Descending | Select-Object -First 5 InstanceName, @{n='CPU';e={[math]::Round($_.CookedValue,1)}}
+
+# Which powershell is it, and what's it running?
+Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
+  Select-Object ProcessId, ParentProcessId, CommandLine | Format-List</code></pre>
+<p style="font-size:14px;color:#475569">The <code>CommandLine</code> column is the money shot: it shows the hidden script path. Cross-check in Task Manager (<code>Ctrl+Shift+Esc</code> &gt; Details, add the <i>Command line</i> column).</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>6. Find out why it survives a reboot</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Get-CimInstance Win32_StartupCommand |
+  Select-Object Name, Location, User, Command | Format-List
+
+Get-ScheduledTask | Where-Object { $_.State -ne 'Disabled' -and $_.TaskPath -notlike '\Microsoft\*' } |
+  Select-Object TaskName, TaskPath, State</code></pre>
+<p style="font-size:14px;color:#475569">You should spot <code>SyncHelper</code> under <code>HKU\...\Run</code>. Also open <b>Task Manager &gt; Startup apps</b> to see it the way a user would. Scheduled tasks are the other common hiding spot, so make checking both a habit.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>7. Find what's eating the disk</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code># Biggest folders in the user's profile (top level)
+Get-ChildItem $env:USERPROFILE -Directory -Force -ErrorAction SilentlyContinue | ForEach-Object {
+  $sum = (Get-ChildItem $_.FullName -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+  [pscustomobject]@{ Folder = $_.Name; GB = [math]::Round($sum/1GB,2) }
+} | Sort-Object GB -Descending | Select-Object -First 5
+
+# Biggest individual files under AppData
+Get-ChildItem "$env:LOCALAPPDATA" -Recurse -File -Force -ErrorAction SilentlyContinue |
+  Sort-Object Length -Descending | Select-Object -First 5 FullName, @{n='GB';e={[math]::Round($_.Length/1GB,2)}}</code></pre>
+<p style="font-size:14px;color:#475569">On a real call you'd also use <b>Settings &gt; System &gt; Storage</b> or the free tool <b>WinDirStat</b>. Note what you find before deleting anything: it's the user's data until proven otherwise.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>8. Read the logs for anything else</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code># Errors and criticals in the System log, last 24 hours
+Get-WinEvent -FilterHashtable @{LogName='System'; Level=1,2; StartTime=(Get-Date).AddDays(-1)} -MaxEvents 20 -ErrorAction SilentlyContinue |
+  Select-Object TimeCreated, Id, ProviderName, Message | Format-Table -Wrap
+
+# Unexpected shutdowns (41 = Kernel-Power, 6008 = dirty shutdown)
+Get-WinEvent -FilterHashtable @{LogName='System'; Id=41,6008} -MaxEvents 5 -ErrorAction SilentlyContinue</code></pre>
+<p style="font-size:14px;color:#475569">Then run <code>perfmon /rel</code> to open <b>Reliability Monitor</b>. It's the fastest &ldquo;what changed last week?&rdquo; view in Windows, and users never know it exists.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>9. Check system file health</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>DISM /Online /Cleanup-Image /ScanHealth
+sfc /scannow</code></pre>
+<p style="font-size:14px;color:#475569">Each takes a few minutes; start it and keep going in a second window. On your clean VM both should come back clean. Know the order for real tickets: if SFC finds corruption it can't fix, run <code>DISM /Online /Cleanup-Image /RestoreHealth</code> and then <code>sfc /scannow</code> again.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>10. Fix it</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code># Stop the hog (match on command line so you don't kill your own shell)
+Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
+  Where-Object CommandLine -like '*synchelper.ps1*' |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+# Remove the startup entry and the script
+Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'SyncHelper'
+Remove-Item C:\ProgramData\SyncHelper -Recurse -Force
+
+# Clear the junk (lab only; on a real ticket, confirm with the user first)
+Remove-Item "$env:LOCALAPPDATA\Temp\ExcelCache" -Recurse -Force</code></pre>
+<p style="font-size:14px;color:#475569">For routine space recovery on real machines, <code>cleanmgr /sageset:1</code> then <code>cleanmgr /sagerun:1</code> (or Storage Sense) is the safe, supported way.</p></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Verify it worked</h2>
+<ul style="list-style:none;padding-left:0">
+<li><label><input type="checkbox"> Re-run the step 5 counter: no <code>powershell</code> instance near the top.</label></li>
+<li><label><input type="checkbox"> <code>Get-CimInstance Win32_StartupCommand</code> no longer lists <code>SyncHelper</code>.</label></li>
+<li><label><input type="checkbox"> Step 4's <code>Free_GB</code> went back up by about 3 GB.</label></li>
+<li><label><input type="checkbox"> Sign out and back in: Task Manager stays quiet and the fan (well, the CPU graph) settles.</label></li>
+<li><label><input type="checkbox"> DISM and SFC both reported no integrity violations.</label></li>
+</ul>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Write the ticket note (2 minutes)</h2>
+<div style="background:#f8fafc;border-left:4px solid #16a34a;padding:12px 16px;border-radius:4px;font-size:14px">Close INC-0061 in four lines. <b>Symptoms</b>: slowness, loud fan, low disk warning. <b>Cause</b>: a hidden script (<code>synchelper.ps1</code>) using a full CPU core, relaunched at logon by an HKCU Run key, plus about 3 GB of stale temp files. <b>Fix</b>: stopped the process, removed the Run key and script, cleared temp data after confirming with the user; DISM/SFC clean. <b>Verified</b>: CPU idle after a fresh logon, 3 GB recovered, user confirmed Excel opens normally. Add one more line if this were real: <i>escalated to Security to review where the script came from.</i></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Cleanup</h2>
+<p>You already removed the planted items in step 10. To be thorough, revert the VM to <code>pre-lab04</code> (or the clean Lab 03 checkpoint). Keep that clean checkpoint around: future Windows labs start from it.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code># Hyper-V, from your host's admin PowerShell (VM name is whatever you called it)
+Restore-VMCheckpoint -VMName 'WIN11-LAB' -Name 'pre-lab04' -Confirm:$false
+
+# VirtualBox, from your host (VM must be powered off)
+VBoxManage snapshot "WIN11-LAB" restore "pre-lab04"</code></pre>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Interview questions</h2>
+<ol>
+<li><b>A user says their computer is slow. What do you check, and in what order?</b> <span style="color:#64748b">(Scope it first: everything or one app, since when, what changed. Then uptime, CPU/RAM/disk in Task Manager or Resource Monitor, free space, startup items, Reliability Monitor and event logs, updates, malware scan, SFC/DISM. Hardware last: disk health and RAM.)</span></li>
+<li><b>What's the difference between SFC and DISM, and why does the order matter?</b> <span style="color:#64748b">(SFC repairs protected system files from the local component store; DISM repairs that component store itself, from Windows Update or a source. If the store is broken, SFC can't fix anything until DISM runs.)</span></li>
+<li><b>Name three places a program can configure itself to start automatically.</b> <span style="color:#64748b">(HKCU/HKLM Run and RunOnce keys, the Startup folder in shell:startup, scheduled tasks, services. Bonus: Group Policy logon scripts, which connects back to Lab 01.)</span></li>
+</ol>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Stretch goal (optional)</h2>
+<p>Download the free <b>Sysinternals Autoruns</b> and <b>Process Explorer</b> from Microsoft Learn inside the VM, re-plant Part A, and find both the process and the Run key with them instead of PowerShell. Then turn steps 4&ndash;8 into one script, <code>Get-SlowPcReport.ps1</code>, that writes a single text report to <code>C:\Temp</code> you could attach to a ticket.</p>
+
+<p style="margin-top:28px;font-size:13px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:12px">Lab Rat &middot; Lab 04 &middot; Run everything inside your own lab VM only. Next up: PowerShell.</p>
+</div></div></body></html>

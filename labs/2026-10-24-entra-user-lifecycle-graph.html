@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Lab 02: Entra ID User Lifecycle with Microsoft Graph PowerShell</title></head>
+<body style="margin:0;background:#f4f6f9;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;line-height:1.55">
+<div style="max-width:860px;margin:30px auto;background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden">
+<div style="background:linear-gradient(135deg,#0b3d91,#2563eb);color:#fff;padding:28px 34px">
+<div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.85">Lab Rat &middot; Lab 02 &middot; Sat Oct 24, 2026</div>
+<h1 style="margin:6px 0 4px;font-size:28px">Entra ID User Lifecycle with Microsoft Graph PowerShell</h1>
+<div style="opacity:.9">Track: M365 &amp; Entra &middot; Builds on Lab 01 (on-prem AD onboarding)</div>
+</div>
+<div style="padding:26px 34px">
+
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+<span style="background:#e0ecff;color:#0b3d91;padding:5px 12px;border-radius:20px;font-size:14px">&#9201; 25&ndash;30 min</span>
+<span style="background:#e6f7ee;color:#166534;padding:5px 12px;border-radius:20px;font-size:14px">Level: Entry</span>
+<span style="background:#fff4e0;color:#92400e;padding:5px 12px;border-radius:20px;font-size:14px">Skill: cloud identity admin</span>
+</div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">The ticket</h2>
+<div style="background:#f8fafc;border-left:4px solid #2563eb;padding:12px 16px;border-radius:4px;font-family:Consolas,monospace;font-size:14px">
+<b>INC-0042</b> &middot; Priority: P3<br>
+From: HR &lt;hr@contoso.lab&gt;<br>
+&ldquo;New hire <b>Lab Tester</b> starts Monday in Help Desk and needs an M365 account in the Help Desk security group. Also, <b>the same contractor is leaving Friday</b>: please make sure access is cut off cleanly.&rdquo;
+</div>
+<p>Last lab you did this on-prem with <code>New-ADUser</code>. Lots of shops are cloud-only now, so today you do the full joiner/leaver flow in Entra ID (formerly Azure AD) with the Microsoft Graph PowerShell SDK. Same idea, different cmdlets.</p>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Prerequisites (all free)</h2>
+<ul>
+<li>A test tenant where you're Global Admin or User Admin: a <b>Microsoft 365 Developer Program</b> sandbox if you qualify, or a <b>free Entra ID tenant</b> (comes with a free Azure account). Never a school or work tenant.</li>
+<li>A lab VM (Hyper-V or VirtualBox, Windows 10/11 or Windows Server eval) with <b>PowerShell 7</b>. Your Lab 01 VM works fine.</li>
+<li>Internet access from the VM.</li>
+</ul>
+<div style="background:#fff7ed;border:1px solid #fdba74;padding:10px 14px;border-radius:6px;font-size:14px">&#9888; Licensing step (6) needs a tenant with M365 licenses (dev sandbox). On a free Entra tenant, skip it; everything else works.</div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Steps</h2>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>1. Install the Graph SDK</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Install-Module Microsoft.Graph -Scope CurrentUser
+Get-InstalledModule Microsoft.Graph | Select-Object Name, Version</code></pre>
+<p style="font-size:14px;color:#475569">It's big (lots of sub-modules), so give it a couple of minutes.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>2. Connect with only the scopes you need</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Connect-MgGraph -Scopes "User.ReadWrite.All","Group.ReadWrite.All","Organization.Read.All","User-PasswordProfile.ReadWrite.All"
+Get-MgContext | Select-Object Account, TenantId, Scopes</code></pre>
+<p style="font-size:14px;color:#475569">Sign in with your test-tenant admin and accept the consent prompt.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>3. Grab your tenant's default domain</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>$domain = (Get-MgDomain | Where-Object IsDefault).Id
+$domain</code></pre></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>4. Create the user (joiner)</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>$pw = @{ Password = "Lab-Temp!2026x"; ForceChangePasswordNextSignIn = $true }
+$u = New-MgUser -DisplayName "Lab Tester" `
+  -UserPrincipalName "lab.tester@$domain" `
+  -MailNickname "lab.tester" `
+  -AccountEnabled `
+  -PasswordProfile $pw `
+  -UsageLocation "US" `
+  -Department "Help Desk" -JobTitle "IT Support Tech"
+$u | Select-Object Id, DisplayName, UserPrincipalName</code></pre>
+<p style="font-size:14px;color:#475569"><code>UsageLocation</code> isn't optional in real life: you can't assign a license without it.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>5. Create the security group and add the user</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>$g = New-MgGroup -DisplayName "LAB-HelpDesk" `
+  -MailEnabled:$false -SecurityEnabled `
+  -MailNickname "lab-helpdesk" `
+  -Description "Lab 02 test group"
+New-MgGroupMember -GroupId $g.Id -DirectoryObjectId $u.Id</code></pre></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>6. (Dev sandbox only) Assign a license</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Get-MgSubscribedSku | Select-Object SkuPartNumber, SkuId, ConsumedUnits
+$sku = Get-MgSubscribedSku | Where-Object SkuPartNumber -eq "DEVELOPERPACK_E5"   # use whatever SKU you see above
+Set-MgUserLicense -UserId $u.Id -AddLicenses @(@{ SkuId = $sku.SkuId }) -RemoveLicenses @()</code></pre></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>7. Classic help-desk call: &ldquo;I forgot my password&rdquo;</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Update-MgUser -UserId $u.Id -PasswordProfile @{
+  Password = "Lab-Reset!2026y"; ForceChangePasswordNextSignIn = $true }</code></pre>
+<p style="font-size:14px;color:#475569">Real world: verify the caller's identity <i>before</i> you do this. That's the whole point of the ticket.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>8. Offboard (leaver): block, kill sessions, strip access</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code># 1) Block sign-in
+Update-MgUser -UserId $u.Id -AccountEnabled:$false
+# 2) Invalidate refresh tokens (forces re-auth everywhere)
+Revoke-MgUserSignInSession -UserId $u.Id
+# 3) Remove group membership
+Remove-MgGroupMemberByRef -GroupId $g.Id -DirectoryObjectId $u.Id</code></pre>
+<p style="font-size:14px;color:#475569">Order matters: block first, then revoke, so they can't just sign right back in.</p></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Verify it worked</h2>
+<div style="margin:8px 0"><label><input type="checkbox"> User exists and is disabled:</label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Get-MgUser -UserId $u.Id -Property DisplayName,UserPrincipalName,AccountEnabled,Department,UsageLocation |
+  Format-List DisplayName,UserPrincipalName,AccountEnabled,Department,UsageLocation</code></pre>
+<p style="font-size:14px;color:#475569">Expect <code>AccountEnabled : False</code>.</p></div>
+<div style="margin:8px 0"><label><input type="checkbox"> Group is now empty (should return nothing):</label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Get-MgGroupMember -GroupId $g.Id</code></pre></div>
+<div style="margin:8px 0"><label><input type="checkbox"> In the <b>Entra admin center</b> (entra.microsoft.com), open Users &rarr; Lab Tester &rarr; Audit logs and find your create, update, and revoke events. Being able to read audit logs is a real interview flex.</label></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Cleanup</h2>
+<div style="margin:8px 0"><label><input type="checkbox"> Delete the test objects and disconnect:</label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Remove-MgUser  -UserId  $u.Id
+Remove-MgGroup -GroupId $g.Id
+# Deleted users sit in the recycle bin for 30 days. To purge now (needs Directory.ReadWrite.All):
+# Remove-MgDirectoryDeletedItem -DirectoryObjectId $u.Id
+Disconnect-MgGraph</code></pre></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Interview questions</h2>
+<ol>
+<li><b>An employee was fired an hour ago and is still reading email on their phone. What do you do, and why isn't disabling the account enough?</b><br><span style="color:#475569">Hint: existing tokens stay valid until they expire; revoke sessions too.</span></li>
+<li><b>What's the difference between a security group and a Microsoft 365 group?</b><br><span style="color:#475569">Hint: permissions/licensing vs. shared mailbox, Teams, SharePoint.</span></li>
+<li><b>A user was deleted by mistake yesterday. Can you get them back?</b><br><span style="color:#475569">Hint: soft-delete, 30-day recycle bin, Deleted users in the admin center.</span></li>
+</ol>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">&#11088; Stretch goal</h2>
+<p>Make a <code>newhires.csv</code> with 3 users (DisplayName, Alias, Department) and write a short script that loops with <code>Import-Csv | ForEach-Object</code> to create each user and drop them into <code>LAB-HelpDesk</code>. Bonus: write a matching <code>Offboard-User.ps1</code> that takes a UPN and runs all of step 8. Then clean everything up.</p>
+
+<div style="margin-top:26px;padding:12px 16px;background:#f1f5f9;border-radius:6px;font-size:13px;color:#64748b">Run this only in your own test tenant and lab VM. Next up in the rotation: Intune.</div>
+</div></div></body></html>

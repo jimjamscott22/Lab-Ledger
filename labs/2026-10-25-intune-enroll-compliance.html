@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Lab 03: Enroll a Windows VM in Intune and Fix a Noncompliant Device</title></head>
+<body style="margin:0;background:#f4f6f9;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;line-height:1.55">
+<div style="max-width:860px;margin:30px auto;background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden">
+<div style="background:linear-gradient(135deg,#0b3d91,#2563eb);color:#fff;padding:28px 34px">
+<div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.85">Lab Rat &middot; Lab 03 &middot; Sun Oct 25, 2026</div>
+<h1 style="margin:6px 0 4px;font-size:28px">Enroll a Windows VM in Intune and Fix a Noncompliant Device</h1>
+<div style="opacity:.9">Track: Intune &middot; Builds on Lab 02 (Entra ID users and Graph PowerShell)</div>
+</div>
+<div style="padding:26px 34px">
+
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+<span style="background:#e0ecff;color:#0b3d91;padding:5px 12px;border-radius:20px;font-size:14px">&#9201; 25&ndash;30 min</span>
+<span style="background:#e6f7ee;color:#166534;padding:5px 12px;border-radius:20px;font-size:14px">Level: Entry</span>
+<span style="background:#fff4e0;color:#92400e;padding:5px 12px;border-radius:20px;font-size:14px">Skill: endpoint management &amp; compliance troubleshooting</span>
+</div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">The ticket</h2>
+<div style="background:#f8fafc;border-left:4px solid #2563eb;padding:12px 16px;border-radius:4px;font-family:Consolas,monospace;font-size:14px">
+<b>INC-0057</b> &middot; Priority: P2<br>
+From: Dana (Sales) &lt;dana@contoso.lab&gt;<br>
+&ldquo;IT set up my new laptop yesterday, but now Outlook says my <b>device doesn't meet the organization's requirements</b> and I can't get to email. Company Portal shows a red X. Help!&rdquo;
+</div>
+<p>This is one of the most common Intune tickets out there. Today you play both sides: you enroll a Windows VM, deliberately break compliance with a policy, then troubleshoot it the way you would on a real call, from the admin center, from the device, and from Graph PowerShell.</p>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Prerequisites (all free)</h2>
+<ul>
+<li>Your test tenant from Lab 02. Intune needs a license: the <b>M365 Developer Program</b> E5 sandbox includes it, or start the free 30-day <b>Microsoft Intune trial</b> on a free Entra tenant. Never a school or work tenant.</li>
+<li>A test user with an Intune (or E5) license. Your admin account is fine for a lab.</li>
+<li>A <b>Windows 11 Enterprise evaluation</b> VM (free 90-day ISO from the Microsoft Evaluation Center) in Hyper-V or VirtualBox. Home edition can't join Entra ID. <b>Take a snapshot/checkpoint first.</b></li>
+<li>PowerShell 7 with the Microsoft.Graph module (installed in Lab 02).</li>
+</ul>
+<div style="background:#fff7ed;border:1px solid #fdba74;padding:10px 14px;border-radius:6px;font-size:14px">&#9888; Check one setting before you start: <b>intune.microsoft.com &gt; Devices &gt; Enrollment &gt; Windows &gt; Automatic Enrollment</b>. Set <i>MDM user scope</i> to <b>All</b> (or a group your user is in). If this is &ldquo;None&rdquo;, the device joins Entra but never shows up in Intune, which is itself a classic ticket.</div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Steps</h2>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>1. Create a compliance policy that will fail on purpose</b></label>
+<p style="font-size:14px;color:#475569">In the Intune admin center: <b>Devices &gt; Compliance &gt; Create policy</b>, platform <b>Windows 10 and later</b>. Name it <code>LAB03-Win-Baseline</code>. Under <i>Device Properties</i> set <b>Minimum OS version</b> to <code>10.0.99999.0</code> (no real build is this high, so it will fail). Under <i>System Security</i> set <b>Firewall</b> to <b>Require</b>. Leave Actions for noncompliance at the default (mark noncompliant immediately). Assign to <b>All users</b> or your test user, then create it.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>2. Join the VM to Entra ID (this enrolls it in Intune)</b></label>
+<p style="font-size:14px;color:#475569">On the VM: <b>Settings &gt; Accounts &gt; Access work or school &gt; Connect</b>, then click <b>Join this device to Microsoft Entra ID</b> (the small link at the bottom). Sign in as your test user and confirm. Sign out and back in as that user (<code>user@yourtenant.onmicrosoft.com</code>).</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>3. Confirm the join from the device</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>dsregcmd /status | Select-String "AzureAdJoined|DomainJoined|TenantName|MdmUrl|AzureAdPrt"</code></pre>
+<p style="font-size:14px;color:#475569">You want <code>AzureAdJoined : YES</code>, your tenant name, and an <code>MdmUrl</code> pointing at <code>enrollment.manage.microsoft.com</code>. No MdmUrl means auto-enrollment scope is wrong (see the warning above).</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>4. Force a sync and check the MDM event log</b></label>
+<p style="font-size:14px;color:#475569">Settings &gt; Access work or school &gt; click the account &gt; <b>Info &gt; Sync</b>. Then, in an admin PowerShell on the VM:</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Get-WinEvent -LogName "Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin" -MaxEvents 15 |
+  Select-Object TimeCreated, Id, LevelDisplayName, Message | Format-List</code></pre>
+<p style="font-size:14px;color:#475569">This log is where enrollment and policy errors land. Note any Error-level entries and their IDs.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>5. Find the device and its compliance state with Graph</b></label>
+<p style="font-size:14px;color:#475569">From your lab admin box (PowerShell 7):</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>Connect-MgGraph -Scopes "DeviceManagementManagedDevices.ReadWrite.All","DeviceManagementManagedDevices.PrivilegedOperations.All","DeviceManagementConfiguration.Read.All"
+
+Get-MgDeviceManagementManagedDevice |
+  Select-Object DeviceName, UserPrincipalName, OperatingSystem, OsVersion, ComplianceState, LastSyncDateTime |
+  Format-Table -AutoSize</code></pre>
+<p style="font-size:14px;color:#475569">Compliance can take 5&ndash;15 minutes to evaluate. You'll likely see <code>unknown</code> or <code>inGracePeriod</code> first, then <code>noncompliant</code>. Grab a coffee, or keep going and come back.</p></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>6. Find out <i>why</i> it's noncompliant</b></label>
+<p style="font-size:14px;color:#475569">Admin center: <b>Devices &gt; All devices &gt; (your VM) &gt; Device compliance &gt; LAB03-Win-Baseline</b>. You should see <i>Minimum OS version</i> flagged with the actual build next to it. Also check the user's view: open <b>Company Portal</b> on the VM and click the device; it lists the same failing setting in plain English. That's the screen Dana is looking at.</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code># On the VM: what build is it really?
+[System.Environment]::OSVersion.Version
+Get-NetFirewallProfile | Select-Object Name, Enabled</code></pre></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>7. Fix it the right way</b></label>
+<p style="font-size:14px;color:#475569">The device is fine; the policy is wrong. Edit <code>LAB03-Win-Baseline</code> and change Minimum OS version to a real baseline your VM meets, e.g. <code>10.0.22621.0</code> (Windows 11 22H2). Save. Then push a sync from Graph instead of waiting:</p>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code>$dev = Get-MgDeviceManagementManagedDevice -Filter "deviceName eq 'YOUR-VM-NAME'"
+Sync-MgDeviceManagementManagedDevice -ManagedDeviceId $dev.Id</code></pre></div>
+
+<div style="margin:14px 0"><label><input type="checkbox"> <b>8. Bonus break-fix: turn the firewall off</b></label>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code># On the VM (admin) - lab only!
+Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+# Sync from Settings, wait, re-check compliance... then fix:
+Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True</code></pre>
+<p style="font-size:14px;color:#475569">Now the device is the problem, not the policy. Knowing which side to fix is the whole skill.</p></div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Verify it worked</h2>
+<ul style="list-style:none;padding-left:0">
+<li><label><input type="checkbox"> <code>dsregcmd /status</code> shows <code>AzureAdJoined : YES</code> and an MdmUrl.</label></li>
+<li><label><input type="checkbox"> The VM appears in <code>Get-MgDeviceManagementManagedDevice</code> with your test user's UPN.</label></li>
+<li><label><input type="checkbox"> You saw <code>noncompliant</code> with the OS-version reason, then <code>compliant</code> after the policy fix.</label></li>
+<li><label><input type="checkbox"> Company Portal on the VM shows a green check.</label></li>
+</ul>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Write the ticket note (2 minutes)</h2>
+<div style="background:#f8fafc;border-left:4px solid #16a34a;padding:12px 16px;border-radius:4px;font-size:14px">Practice closing INC-0057 in three lines: <b>Cause</b> (compliance policy had an unreachable minimum OS version), <b>Fix</b> (corrected baseline to 10.0.22621.0, forced sync), <b>Verified</b> (device compliant in Intune, user confirmed Outlook access). Short, factual, and something the next tech can search for.</div>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Cleanup</h2>
+<pre style="background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;font-size:13.5px"><code># Remove the Intune record and the Entra device object
+$dev = Get-MgDeviceManagementManagedDevice -Filter "deviceName eq 'YOUR-VM-NAME'"
+Remove-MgDeviceManagementManagedDevice -ManagedDeviceId $dev.Id
+
+Connect-MgGraph -Scopes "Device.ReadWrite.All"
+$aad = Get-MgDevice -Filter "displayName eq 'YOUR-VM-NAME'"
+Remove-MgDevice -DeviceId $aad.Id
+
+Disconnect-MgGraph</code></pre>
+<p style="font-size:14px;color:#475569">Then delete the <code>LAB03-Win-Baseline</code> policy in the admin center (or keep it with the fixed value for Lab-future use), and revert the VM to the checkpoint you took. Keep the checkpoint: the next Intune lab starts from a clean, un-enrolled VM.</p>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Interview questions</h2>
+<ol>
+<li><b>What's the difference between a compliance policy and a configuration profile in Intune?</b> <span style="color:#64748b">(Hint: one checks and reports, the other pushes settings. Conditional Access uses the compliance result to allow or block access.)</span></li>
+<li><b>A device is Entra-joined but doesn't show up in Intune. Where do you look first?</b> <span style="color:#64748b">(MDM user scope under automatic enrollment, the user's Intune license, and <code>dsregcmd /status</code> for an MdmUrl.)</span></li>
+<li><b>A user says they're blocked from email because their device is noncompliant. Walk me through it.</b> <span style="color:#64748b">(Identify the device, read the failing setting, decide device-side vs. policy-side fix, sync, verify, document.)</span></li>
+</ol>
+
+<h2 style="color:#0b3d91;border-bottom:2px solid #e5e7eb;padding-bottom:4px">Stretch goal (optional)</h2>
+<p>Create a <b>Settings catalog</b> configuration profile (<b>Devices &gt; Configuration &gt; Create &gt; Windows 10 and later &gt; Settings catalog</b>) that sets a lock-screen message or disables the Windows consumer features, assign it, and confirm it applied with <code>mdmdiagnosticstool.exe -out C:\Temp\MDMDiag</code> (open the HTML report it generates). Bonus: export the device list to CSV with Graph and <code>Export-Csv</code>.</p>
+
+<p style="margin-top:28px;font-size:13px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:12px">Lab Rat &middot; Lab 03 &middot; Run everything in your own lab tenant and VMs only. Next up: Windows troubleshooting.</p>
+</div></div></body></html>
