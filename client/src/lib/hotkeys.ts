@@ -8,6 +8,10 @@ export function isTyping(target: EventTarget | null): boolean {
   return false;
 }
 
+export function isSearchShortcut(e: KeyboardEvent): boolean {
+  return (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k';
+}
+
 export function useHotkeys(handler: (e: KeyboardEvent) => void): (e: KeyboardEvent) => void {
   const ref = useRef(handler);
   ref.current = handler;

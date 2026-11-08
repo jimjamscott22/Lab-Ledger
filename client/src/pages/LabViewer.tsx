@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { LAB_STATUSES, type LabStatus } from '@lab-ledger/shared';
 import { JournalEditor } from '../components/JournalEditor';
 import { LabFrame } from '../components/LabFrame';
@@ -23,7 +23,11 @@ export default function LabViewer() {
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [status, setStatus] = useState<LabStatus>('not_started');
   const [focusStep, setFocusStep] = useState(0);
-  const [tab, setTab] = useState<'steps' | 'journal' | 'ticket'>('steps');
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [tab, setTab] = useState<'steps' | 'journal' | 'ticket'>(
+    requestedTab === 'journal' || requestedTab === 'ticket' ? requestedTab : 'steps',
+  );
   const [allChecked, setAllChecked] = useState(false);
   const journalRef = useRef<HTMLTextAreaElement>(null);
 

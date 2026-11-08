@@ -48,3 +48,9 @@ CREATE TABLE IF NOT EXISTS question_reviews (
 );
 CREATE INDEX IF NOT EXISTS question_reviews_due ON question_reviews(due_date);
 `;
+
+export const SCHEMA_V4 = `
+CREATE VIRTUAL TABLE IF NOT EXISTS search_idx USING fts5(
+  slug UNINDEXED, kind UNINDEXED, title, body, tokenize = 'porter unicode61'
+);
+`;

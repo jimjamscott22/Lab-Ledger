@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { BackupV1 } from '@lab-ledger/shared';
 import type { Db } from './db/open';
 import * as repo from './db/repo';
+import { reindexNotes } from './search';
 
 export function exportBackup(db: Db, dataDir: string, now: Date): BackupV1 {
   const labState = (db.prepare('SELECT slug, status, started_at, completed_at, updated_at FROM lab_state ORDER BY slug').all() as
@@ -130,6 +131,7 @@ export function importBackup(db: Db, dataDir: string, b: BackupV1): void {
       b.attachments.forEach((r) => insA.run(r.id, r.slug, r.fileName, r.mime, r.bytes, r.createdAt));
       const insAct = db.prepare('INSERT INTO activity (day,slug,kind,at) VALUES (?,?,?,?)');
       b.activity.forEach((r) => insAct.run(r.day, r.slug, r.kind, r.at));
+      reindexNotes(db);
 
       const hadRoot = fs.existsSync(root);
       if (hadRoot) fs.renameSync(root, previous);
