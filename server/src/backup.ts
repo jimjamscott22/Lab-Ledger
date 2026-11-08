@@ -4,6 +4,80 @@ import type { BackupV1 } from '@lab-ledger/shared';
 import type { Db } from './db/open';
 import * as repo from './db/repo';
 import { reindexNotes } from './search';
+import { sniffImage, MAX_BYTES } from './routes/attachments';
+
+export class BackupValidationError extends Error {}
+
+const RESTORE_STATE_FILE = 'attachments.restore-state.json';
+type RestorePhase = 'staged' | 'committed';
+
+function writeRestoreState(dataDir: string, phase: RestorePhase): void {
+  fs.writeFileSync(path.join(dataDir, RESTORE_STATE_FILE), JSON.stringify({ phase }));
+}
+
+function readRestoreState(dataDir: string): RestorePhase | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(dataDir, RESTORE_STATE_FILE), 'utf8')) as { phase?: unknown };
+    return parsed.phase === 'staged' || parsed.phase === 'committed' ? parsed.phase : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Brings the attachments directory back in line with the database after a
+ * restore that was interrupted mid-flight. A restore interrupted before its
+ * database transaction commits keeps the old files; one interrupted after
+ * the commit is finished by putting the staged files in place.
+ */
+export function reconcileRestore(dataDir: string): void {
+  const root = path.join(dataDir, 'attachments');
+  const staging = path.join(dataDir, 'attachments.restore-new');
+  const previous = path.join(dataDir, 'attachments.restore-old');
+  const phase = readRestoreState(dataDir);
+  if (!phase) {
+    // Legacy/interrupted state without a marker: never leave the live tree missing.
+    if (!fs.existsSync(root) && fs.existsSync(previous)) fs.renameSync(previous, root);
+    return;
+  }
+  if (phase === 'staged') {
+    fs.rmSync(staging, { recursive: true, force: true });
+    if (!fs.existsSync(root) && fs.existsSync(previous)) fs.renameSync(previous, root);
+  } else {
+    if (fs.existsSync(staging)) {
+      if (fs.existsSync(root) && !fs.existsSync(previous)) fs.renameSync(root, previous);
+      if (!fs.existsSync(root)) fs.renameSync(staging, root);
+    }
+    fs.rmSync(previous, { recursive: true, force: true });
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+  fs.rmSync(path.join(dataDir, RESTORE_STATE_FILE), { force: true });
+}
+
+interface DecodedAttachment {
+  meta: BackupV1['attachments'][number];
+  data: Buffer;
+}
+
+function decodeAttachments(b: BackupV1): DecodedAttachment[] {
+  return b.attachments.map((a) => {
+    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(a.dataBase64)) {
+      throw new BackupValidationError(`Attachment ${a.id}: data is not valid base64`);
+    }
+    const data = Buffer.from(a.dataBase64, 'base64');
+    if (data.length !== a.bytes) {
+      throw new BackupValidationError(`Attachment ${a.id}: expected ${a.bytes} bytes, decoded ${data.length}`);
+    }
+    if (data.length > MAX_BYTES) {
+      throw new BackupValidationError(`Attachment ${a.id}: exceeds the ${MAX_BYTES} byte limit`);
+    }
+    const kind = sniffImage(data);
+    if (!kind || kind.mime !== a.mime || !a.fileName.endsWith(`.${kind.ext}`)) {
+      throw new BackupValidationError(`Attachment ${a.id}: content does not match its declared type`);
+    }
+    return { meta: a, data };
+  });
+}
 
 export function exportBackup(db: Db, dataDir: string, now: Date): BackupV1 {
   const labState = (db.prepare('SELECT slug, status, started_at, completed_at, updated_at FROM lab_state ORDER BY slug').all() as
@@ -81,17 +155,23 @@ export function importBackup(db: Db, dataDir: string, b: BackupV1): void {
   const staging = path.join(dataDir, 'attachments.restore-new');
   const previous = path.join(dataDir, 'attachments.restore-old');
 
+  // Validate every attachment before touching the database or the live files.
+  const decoded = decodeAttachments(b);
+
+  reconcileRestore(dataDir);
   fs.rmSync(staging, { recursive: true, force: true });
   fs.rmSync(previous, { recursive: true, force: true });
   fs.mkdirSync(dataDir, { recursive: true });
 
+  let committed = false;
   try {
-    for (const a of b.attachments) {
-      const dir = path.join(staging, a.slug);
+    for (const { meta, data } of decoded) {
+      const dir = path.join(staging, meta.slug);
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, a.fileName), Buffer.from(a.dataBase64, 'base64'));
+      fs.writeFileSync(path.join(dir, meta.fileName), data);
     }
     fs.mkdirSync(staging, { recursive: true });
+    writeRestoreState(dataDir, 'staged');
 
     db.transaction(() => {
       for (const t of [
@@ -132,21 +212,23 @@ export function importBackup(db: Db, dataDir: string, b: BackupV1): void {
       const insAct = db.prepare('INSERT INTO activity (day,slug,kind,at) VALUES (?,?,?,?)');
       b.activity.forEach((r) => insAct.run(r.day, r.slug, r.kind, r.at));
       reindexNotes(db);
-
-      const hadRoot = fs.existsSync(root);
-      if (hadRoot) fs.renameSync(root, previous);
-      try {
-        fs.renameSync(staging, root);
-      } catch (err) {
-        if (hadRoot) fs.renameSync(previous, root);
-        throw err;
-      }
     })();
+    committed = true;
+    writeRestoreState(dataDir, 'committed');
+
+    // The database now points at the staged files; swap them into place.
+    // reconcileRestore() can finish this step if the process dies here.
+    if (fs.existsSync(root)) fs.renameSync(root, previous);
+    fs.renameSync(staging, root);
+    fs.rmSync(previous, { recursive: true, force: true });
+    fs.rmSync(path.join(dataDir, RESTORE_STATE_FILE), { force: true });
   } catch (err) {
-    fs.rmSync(staging, { recursive: true, force: true });
+    if (!committed) {
+      fs.rmSync(staging, { recursive: true, force: true });
+      fs.rmSync(path.join(dataDir, RESTORE_STATE_FILE), { force: true });
+    }
     throw err;
   }
-  fs.rmSync(previous, { recursive: true, force: true });
 }
 
 export function backupToMarkdown(db: Db): string {

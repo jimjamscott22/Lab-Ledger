@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { makeTestApp } from './testing-app';
 import { openDb } from './db/open';
-import { exportBackup, importBackup, backupToMarkdown } from './backup';
+import { exportBackup, importBackup, backupToMarkdown, reconcileRestore } from './backup';
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16, 7)]);
 
@@ -84,6 +84,73 @@ describe('backup', () => {
     expect(fs.readdirSync(path.join(dataDir, 'attachments', 'ad-user-onboarding'))).toEqual(keptFiles);
     expect(fs.existsSync(path.join(dataDir, 'attachments.restore-new'))).toBe(false);
     expect(fs.existsSync(path.join(dataDir, 'attachments.restore-old'))).toBe(false);
+  });
+
+  it('rejects attachments whose bytes do not match their metadata, leaving data untouched', async () => {
+    const { app, ctx, dataDir } = await makeTestApp();
+    const boundary = 'b';
+    const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`), PNG, Buffer.from(`\r\n--${boundary}--\r\n`)]);
+    await app.inject({ method: 'POST', url: '/api/labs/ad-user-onboarding/attachments', payload: body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
+    const before = exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'));
+    const keptFiles = fs.readdirSync(path.join(dataDir, 'attachments', 'ad-user-onboarding'));
+
+    const wrongLength = { ...before, attachments: [{ ...before.attachments[0], bytes: before.attachments[0].bytes + 1 }] };
+    expect(() => importBackup(ctx.db, dataDir, wrongLength)).toThrow(/attachment/i);
+
+    const wrongType = { ...before, attachments: [{ ...before.attachments[0], mime: 'image/jpeg' as const, fileName: before.attachments[0].fileName.replace(/\.png$/, '.jpg') }] };
+    expect(() => importBackup(ctx.db, dataDir, wrongType)).toThrow(/attachment/i);
+
+    expect(exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'))).toEqual(before);
+    expect(fs.readdirSync(path.join(dataDir, 'attachments', 'ad-user-onboarding'))).toEqual(keptFiles);
+  });
+
+  it('rejects a mismatched attachment with 400 via the HTTP API', async () => {
+    const { app, ctx, dataDir } = await makeTestApp();
+    const boundary = 'b';
+    const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`), PNG, Buffer.from(`\r\n--${boundary}--\r\n`)]);
+    await app.inject({ method: 'POST', url: '/api/labs/ad-user-onboarding/attachments', payload: body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
+    const before = exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'));
+    const bad = { ...before, attachments: [{ ...before.attachments[0], bytes: 1 }] };
+    const res = await app.inject({ method: 'POST', url: '/api/restore', payload: bad });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('reconciles a restore interrupted after the database commit', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reconcile-'));
+    const root = path.join(dir, 'attachments');
+    const staging = path.join(dir, 'attachments.restore-new');
+    const previous = path.join(dir, 'attachments.restore-old');
+    fs.mkdirSync(path.join(root, 'lab-a'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'lab-a', 'old.png'), 'old');
+    fs.mkdirSync(path.join(staging, 'lab-a'), { recursive: true });
+    fs.writeFileSync(path.join(staging, 'lab-a', 'new.png'), 'new');
+    // Simulate the crash window: old tree already moved aside, new tree not yet in place.
+    fs.renameSync(root, previous);
+    fs.writeFileSync(path.join(dir, 'attachments.restore-state.json'), JSON.stringify({ phase: 'committed' }));
+
+    reconcileRestore(dir);
+
+    expect(fs.readFileSync(path.join(root, 'lab-a', 'new.png'), 'utf8')).toBe('new');
+    expect(fs.existsSync(previous)).toBe(false);
+    expect(fs.existsSync(staging)).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'attachments.restore-state.json'))).toBe(false);
+  });
+
+  it('discards staged files from a restore interrupted before the database commit', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reconcile-'));
+    const root = path.join(dir, 'attachments');
+    const staging = path.join(dir, 'attachments.restore-new');
+    fs.mkdirSync(path.join(root, 'lab-a'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'lab-a', 'old.png'), 'old');
+    fs.mkdirSync(path.join(staging, 'lab-a'), { recursive: true });
+    fs.writeFileSync(path.join(staging, 'lab-a', 'new.png'), 'new');
+    fs.writeFileSync(path.join(dir, 'attachments.restore-state.json'), JSON.stringify({ phase: 'staged' }));
+
+    reconcileRestore(dir);
+
+    expect(fs.readFileSync(path.join(root, 'lab-a', 'old.png'), 'utf8')).toBe('old');
+    expect(fs.existsSync(staging)).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'attachments.restore-state.json'))).toBe(false);
   });
 
   it('restore via the HTTP API validates input', async () => {

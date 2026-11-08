@@ -237,26 +237,26 @@ export const BackupSchema = z.object({
       completedAt: z.string().nullable(),
       updatedAt: z.string().nullable(),
     }),
-  ),
+  ).max(10_000),
   stepProgress: z.array(
     z.object({
       slug: Slug,
       stepIndex: z.number().int().min(0),
-      textHash: z.string(),
+      textHash: z.string().max(128),
       checked: z.boolean(),
       checkedAt: z.string().nullable(),
     }),
-  ),
+  ).max(100_000),
   journals: z.array(
     z.object({
       slug: Slug,
-      bodyMd: z.string(),
+      bodyMd: z.string().max(200_000),
       timeTakenMin: z.number().int().nullable(),
       difficulty: z.number().int().min(1).max(5).nullable(),
       confidence: z.number().int().min(1).max(5).nullable(),
       updatedAt: z.string().nullable(),
     }),
-  ),
+  ).max(10_000),
   tickets: z
     .array(
       z.object({
@@ -265,6 +265,7 @@ export const BackupSchema = z.object({
         updatedAt: z.string().nullable(),
       }),
     )
+    .max(10_000)
     .default([]),
   questionReviews: z
     .array(
@@ -277,6 +278,7 @@ export const BackupSchema = z.object({
         dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       }),
     )
+    .max(100_000)
     .default([]),
   attachments: z.array(
     z.object({
@@ -284,18 +286,19 @@ export const BackupSchema = z.object({
       slug: Slug,
       fileName: z.string().regex(/^[0-9a-f-]{36}\.(png|jpg|webp)$/),
       mime: Mime,
-      bytes: z.number().int().min(0),
+      // Uploads are capped at 10 MiB; the base64 cap is that size encoded.
+      bytes: z.number().int().min(0).max(10 * 1024 * 1024),
       createdAt: z.string(),
-      dataBase64: z.string(),
+      dataBase64: z.string().max(13_981_016),
     }),
-  ),
+  ).max(10_000),
   activity: z.array(
     z.object({
       day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       slug: Slug,
-      kind: z.string(),
+      kind: z.string().max(64),
       at: z.string(),
     }),
-  ),
+  ).max(1_000_000),
 });
 export type BackupV1 = z.infer<typeof BackupSchema>;

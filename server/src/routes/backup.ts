@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { BackupSchema } from '@lab-ledger/shared';
 import type { AppContext } from '../app';
-import { backupToMarkdown, exportBackup, importBackup } from '../backup';
+import { backupToMarkdown, exportBackup, importBackup, BackupValidationError } from '../backup';
 
 export function registerBackupRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.get('/api/backup', async (_req, reply) => {
@@ -18,9 +18,14 @@ export function registerBackupRoutes(app: FastifyInstance, ctx: AppContext): voi
       .send(backupToMarkdown(ctx.db)),
   );
 
-  app.post('/api/restore', { bodyLimit: 256 * 1024 * 1024 }, async (req) => {
+  app.post('/api/restore', { bodyLimit: 256 * 1024 * 1024 }, async (req, reply) => {
     const payload = BackupSchema.parse(req.body);
-    importBackup(ctx.db, ctx.config.dataDir, payload);
+    try {
+      importBackup(ctx.db, ctx.config.dataDir, payload);
+    } catch (err) {
+      if (err instanceof BackupValidationError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
     return { ok: true };
   });
 }
