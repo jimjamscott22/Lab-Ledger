@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import type { LabDetail } from '@lab-ledger/shared';
+import { LabListQuery, type LabDetail } from '@lab-ledger/shared';
 import type { AppContext } from '../app';
 import * as repo from '../db/repo';
+import { matchingLabSlugs } from '../search';
 import { LAB_FILE_RE } from '../ingest/parse';
 
 const SLUG_RE = /^[a-z0-9-]+$/;
@@ -11,13 +12,18 @@ export const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:
 
 export function registerLabRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.get('/api/labs', async (req) => {
-    const q = req.query as { status?: string; topic?: string; q?: string };
+    const q = LabListQuery.parse(req.query);
     const needle = q.q?.trim().toLowerCase();
+    const matches = needle ? matchingLabSlugs(ctx.db, needle) : null;
     return repo.listSummaries(ctx.db).filter(
       (l) =>
         (!q.status || l.status === q.status) &&
         (!q.topic || (l.topics as string[]).includes(q.topic)) &&
-        (!needle || `${l.title} ${l.topicLabel ?? ''} ${l.slug}`.toLowerCase().includes(needle)),
+        (!q.tag || l.tags.includes(q.tag)) &&
+        (!q.from || l.date >= q.from) &&
+        (!q.to || l.date <= q.to) &&
+        (!q.notes || l.hasNotes === (q.notes === 'yes')) &&
+        (!needle || matches?.has(l.slug) || `${l.title} ${l.topicLabel ?? ''} ${l.slug}`.toLowerCase().includes(needle)),
     );
   });
 

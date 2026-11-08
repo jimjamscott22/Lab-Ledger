@@ -91,3 +91,41 @@ describe('status and step API', () => {
     expect((await app.inject({ method: 'PUT', url: '/api/labs/nope/status', payload: { status: 'completed' } })).statusCode).toBe(404);
   });
 });
+
+describe('richer lab filters', () => {
+  it('combines tags, inclusive dates, status, topic and notes', async () => {
+    const { app } = await makeTestApp();
+    const labs = (await app.inject('/api/labs')).json() as LabSummary[];
+    const lab = labs[0];
+    await app.inject({ method: 'PUT', url: `/api/labs/${lab.slug}/journal`, payload: {
+      bodyMd: 'Unique marmalade troubleshooting note', timeTakenMin: null, difficulty: null, confidence: null,
+    } });
+    const params = new URLSearchParams({ tag: lab.tags[0], from: lab.date, to: lab.date, topic: lab.topics[0], status: 'not_started', notes: 'yes' });
+    expect((await app.inject(`/api/labs?${params}`)).json()).toMatchObject([{ slug: lab.slug, hasNotes: true }]);
+    params.set('notes', 'no');
+    expect((await app.inject(`/api/labs?${params}`)).json()).toEqual([]);
+    expect((await app.inject('/api/labs?q=marmalade')).json()).toMatchObject([{ slug: lab.slug }]);
+    expect((await app.inject('/api/labs?tag=nonexistent')).json()).toEqual([]);
+  });
+
+  it('rejects invalid filters and reversed date ranges', async () => {
+    const { app } = await makeTestApp();
+    for (const query of ['status=bad', 'topic=bad', 'notes=maybe', 'from=2026-02-30', 'to=nope', 'from=2026-11-07&to=2026-11-01', `q=${'x'.repeat(201)}`]) {
+      expect((await app.inject(`/api/labs?${query}`)).statusCode, query).toBe(400);
+    }
+    expect((await app.inject('/api/labs?q=%22')).json()).toEqual([]);
+  });
+
+  it('full-text filtering is not capped by ranked search limits or duplicate document matches', async () => {
+    const { app, ctx } = await makeTestApp();
+    // Multiple documents per lab must produce only one list entry.
+    for (let i = 0; i < 60; i++) {
+      ctx.db.prepare('INSERT INTO search_idx (slug, kind, title, body) VALUES (?,?,?,?)')
+        .run('ad-user-onboarding', 'journal', 'Test', 'cantaloupe');
+    }
+    ctx.db.prepare('INSERT INTO search_idx (slug, kind, title, body) VALUES (?,?,?,?)')
+      .run('linux-file-permissions', 'ticket', 'Test', 'cantaloupe');
+    const results = (await app.inject('/api/labs?q=cantaloupe')).json() as LabSummary[];
+    expect(results.map((lab) => lab.slug)).toEqual(['ad-user-onboarding', 'linux-file-permissions']);
+  });
+});

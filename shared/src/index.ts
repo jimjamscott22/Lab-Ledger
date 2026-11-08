@@ -203,6 +203,19 @@ export const TicketBody = z.object({
   timeToResolve: z.string().max(2_000),
   followUp: z.string().max(20_000),
 });
+const FilterDate = z.string().date();
+export const LabListQuery = z.object({
+  status: z.enum(LAB_STATUSES).optional(),
+  topic: z.enum([...TOPICS, 'other']).optional(),
+  tag: z.string().max(500).optional(),
+  q: z.string().max(200).optional(),
+  from: FilterDate.optional(),
+  to: FilterDate.optional(),
+  notes: z.enum(['yes', 'no']).optional(),
+}).refine((q) => !q.from || !q.to || q.from <= q.to, {
+  message: 'From date must be on or before to date',
+});
+
 export const SearchQuery = z.object({
   q: z.string().max(200),
   limit: z.coerce.number().int().min(1).max(50).default(25),

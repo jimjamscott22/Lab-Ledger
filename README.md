@@ -235,6 +235,12 @@ To restore, go to Settings, choose a JSON backup file, and click **Restore** (or
 
 You can also simply copy the whole `DATA_DIR` folder while the app is stopped.
 
+## Finding labs and keyboard help
+
+The Labs page combines status, topic, tag, inclusive From/To dates, notes presence, and text search. Text search includes lab content, journals, and ticket write-ups. Tags come from the ingested lab HTML. Filters are saved in the URL, so reload and browser history retain them. Reset filters clears every filter and any pending search.
+
+Press `?` outside a text field, or select **Help**, to see global, viewer, and practice shortcuts. `Esc` or **Close** dismisses help and returns focus to the previous control. Page shortcuts pause while help is open. `Ctrl/Cmd+K` opens the Search page.
+
 ## Architecture
 
 An npm-workspaces monorepo:
@@ -285,7 +291,7 @@ All routes are under `/api`. Invalid input returns `400`, an unknown lab returns
 
 | Method and path | Purpose |
 |---|---|
-| `GET /labs?status=&topic=&q=` | List labs with status, step counts, and whether notes exist |
+| `GET /labs?status=&topic=&tag=&from=&to=&notes=&q=` | List labs; combine status, topic, ingested tag, inclusive YYYY-MM-DD dates, notes (yes/no), and text across labs/notes/tickets (up to 200 characters) |
 | `GET /labs/:slug` | Full lab, state, checked steps, journal, and prev/next neighbors |
 | `GET /labs/:slug/raw` | The original lab HTML, with a strict CSP header |
 | `POST /labs/rescan` | Force a rescan; returns `{added, updated, removed, warnings}` |
@@ -329,9 +335,9 @@ Conventions: TypeScript strict mode, ESM, Prettier (single quotes, 100 columns),
 ## Testing
 
 ```bash
-npm test                               # 153 unit and integration tests
+npm test                               # 158 unit and integration tests
 npx playwright install --with-deps chromium   # one-time, for E2E
-npm run e2e                            # 38 browser tests
+npm run e2e                            # 47 browser tests
 npm run lint && npm run typecheck
 ```
 
@@ -364,7 +370,7 @@ The E2E suite runs against a throwaway copy of the fixtures on port 4318 (`.e2e/
 
 **Phase 1 (done):** ingestion and live reload, list and viewer, step progress and status, journal with screenshots, home stats, JSON and Markdown backup.
 
-**Phase 2 (underway):** ticket write-up editor, interview practice with spaced repetition, and full-text search (done); full-text search with Cmd/Ctrl+K is done; next are portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, richer filters and tags, a Sections reading view, a shortcut-help overlay, Docker and compose, and nightly automatic backups.
+**Phase 2 (underway):** ticket write-up editor, interview practice with spaced repetition, full-text search with Cmd/Ctrl+K, shortcut help on `?`, and richer lab filters and tags (done); next are portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, a Sections reading view, Docker and compose, and nightly automatic backups.
 
 **Phase 3 (stretch):** Obsidian sync, a calendar heatmap, a Raspberry Pi deploy guide (Caddy and Tailscale), a PWA for offline phone use, a weekly review summary, and a skill-gap view.
 

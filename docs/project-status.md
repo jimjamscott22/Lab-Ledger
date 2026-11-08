@@ -1,6 +1,7 @@
 # Project status
 
-**Snapshot date:** 2026-11-05  
+**Snapshot date:** 2026-11-07
+
 **Product stage:** Phase 1 complete; Phase 2 in progress
 
 This document records the repository state at the current pause point. The README remains the operational guide; the original design document remains the product source of truth.
@@ -45,6 +46,16 @@ This document records the repository state at the current pause point. The READM
   - `GET /api/search?q=&limit=` sanitises input into quoted terms (the last one a prefix match) and returns structured snippet parts, so the client never renders HTML from search results.
   - Search page with highlighted snippets; results deep-link to the Journal or Ticket tab.
   - Global `Ctrl/Cmd+K` shortcut.
+  - Rapid submissions preserve newer input while the URL updates.
+
+- Keyboard help:
+  - `?` opens a modal shortcut reference outside text fields; a visible Help button is also available.
+  - Lists global search, lab viewer, and practice shortcuts; Escape or Close dismisses it.
+  - Contains keyboard focus, restores focus (including inside the lab iframe), and pauses underlying shortcuts.
+- Richer lab filters and tags:
+  - Labs combines status, topic, ingested tag, inclusive date range, notes presence, and debounced full-text search across labs, journals, and tickets.
+  - Filters persist in the URL, support back/forward and reload, and include counts, reset, empty, loading, and error states.
+  - Tags appear on lab cards; all matching labs are included without the ranked search endpoint's result cap.
 
 ## Persistence and migrations
 
@@ -59,23 +70,21 @@ This document records the repository state at the current pause point. The READM
 
 At this snapshot:
 
-- `npm test`: 153 tests passing across 27 test files.
+- `npm test`: 158 tests passing across 27 test files.
 - `npm run lint`: passing.
 - `npm run typecheck`: passing.
 - `npm run build`: passing.
-- `npm run e2e`: 38 browser tests passing.
-- Browser coverage includes the Practice and Search workflows and serious/critical accessibility checks in light and dark themes.
+- `npm run e2e`: 47 browser tests passing.
+- Browser coverage includes Practice, Search, combined Labs filters, filter history/reset, shortcut help, focus restoration, and serious/critical accessibility checks in light and dark themes.
 
 ## Not implemented yet
 
 Remaining Phase 2 work:
 
 1. Portfolio export with Markdown, static HTML, print-to-PDF, and sensitive-data scanning.
-2. Richer lab filters and tags.
-3. Sections reading view.
-4. Shortcut-help overlay (should list the new `Ctrl/Cmd+K` shortcut).
-5. Docker and Compose support.
-6. Nightly automatic backups.
+2. Sections reading view.
+3. Docker and Compose support.
+4. Nightly automatic backups.
 
 Phase 3 remains unchanged: Obsidian sync, activity heatmap, Raspberry Pi deployment guide, PWA support, weekly review summaries, and skill-gap analysis.
 
@@ -83,7 +92,6 @@ Phase 3 remains unchanged: Obsidian sync, activity heatmap, Raspberry Pi deploym
 
 Suggested next slices, in order:
 
-1. Shortcut-help overlay on `?`, then richer lab filters and tags (the Labs page can reuse the search endpoint for its text filter).
-2. Sections reading view.
-3. Portfolio export with the sensitive-data scan.
-4. Nightly backups, then Docker and Compose.
+1. Sections reading view.
+2. Portfolio export with the sensitive-data scan.
+3. Nightly backups, then Docker and Compose.

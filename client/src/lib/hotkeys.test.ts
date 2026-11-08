@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSearchShortcut, isTyping } from './hotkeys';
+import { isHelpShortcut, isSearchShortcut, isTyping } from './hotkeys';
 
 const el = (tagName: string, extra: Record<string, unknown> = {}) => ({ tagName, isContentEditable: false, ...extra }) as unknown as EventTarget;
 
@@ -30,5 +30,20 @@ describe('isSearchShortcut', () => {
     expect(isSearchShortcut(key({ ctrlKey: true, key: 'j' }))).toBe(false);
     expect(isSearchShortcut(key({ ctrlKey: true, altKey: true }))).toBe(false);
     expect(isSearchShortcut(key({ ctrlKey: true, shiftKey: true }))).toBe(false);
+  });
+});
+
+
+describe('isHelpShortcut', () => {
+  it('accepts question mark outside text fields, including Shift+/', () => {
+    expect(isHelpShortcut(key({ key: '?' }))).toBe(true);
+    expect(isHelpShortcut(key({ key: '?', shiftKey: true }))).toBe(true);
+  });
+  it('ignores typing, modified keys, and a plain slash', () => {
+    expect(isHelpShortcut(key({ key: '/', shiftKey: false }))).toBe(false);
+    for (const modifier of ['ctrlKey', 'altKey', 'metaKey']) {
+      expect(isHelpShortcut(key({ key: '?', [modifier]: true }))).toBe(false);
+    }
+    expect(isHelpShortcut(key({ key: '?', target: el('TEXTAREA') }))).toBe(false);
   });
 });

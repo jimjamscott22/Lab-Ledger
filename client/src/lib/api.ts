@@ -24,7 +24,7 @@ async function request<T>(path: string, init: { method?: string; json?: unknown;
 }
 
 export const api = {
-  labs: () => request<LabSummary[]>('/labs'),
+  labs: (params?: URLSearchParams) => request<LabSummary[]>(`/labs${params?.size ? `?${params}` : ''}`),
   lab: (slug: string) => request<LabDetail>(`/labs/${slug}`),
   stats: () => request<Stats>('/stats'),
   rescan: () => request<{ added: string[]; updated: string[]; removed: string[]; warnings: string[] }>('/labs/rescan', { method: 'POST' }),

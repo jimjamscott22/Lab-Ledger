@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigationType, useSearchParams } from 'react-router-dom';
 import type { SearchKind, SearchResult } from '@lab-ledger/shared';
 import { api } from '../lib/api';
 import { useAsync } from '../lib/useAsync';
@@ -13,6 +13,7 @@ const heading = (r: SearchResult) =>
 
 export default function Search() {
   const [params, setParams] = useSearchParams();
+  const navigationType = useNavigationType();
   const query = (params.get('q') ?? '').trim();
   const [input, setInput] = useState(params.get('q') ?? '');
 
@@ -26,8 +27,10 @@ export default function Search() {
   }, [input]);
 
   useEffect(() => {
-    setInput(params.get('q') ?? '');
-  }, [params.get('q')]);
+    // Our own debounced/submitted searches replace the URL. Their delayed navigation
+    // must not overwrite text typed since submission; POP still restores history.
+    if (navigationType !== 'REPLACE') setInput(params.get('q') ?? '');
+  }, [params.get('q'), navigationType]);
 
   useEffect(() => {
     document.getElementById('search-input')?.focus();

@@ -1,6 +1,8 @@
+import { useRef } from 'react';
+import { ShortcutHelp } from './components/ShortcutHelp';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { LiveEvents, ToastProvider } from './components/Toasts';
-import { isSearchShortcut, useHotkeys } from './lib/hotkeys';
+import { isHelpShortcut, isSearchShortcut, useHotkeys } from './lib/hotkeys';
 import { useTheme } from './lib/theme';
 import Home from './pages/Home';
 import LabList from './pages/LabList';
@@ -10,9 +12,24 @@ import Practice from './pages/Practice';
 import Search from './pages/Search';
 
 export default function App() {
+  const helpRef = useRef<HTMLDialogElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const openHelp = () => {
+    const active = document.activeElement;
+    // A frame is the parent's active element; preserve its actual focused control too.
+    returnFocus.current = (active?.tagName === 'IFRAME'
+      ? (active as HTMLIFrameElement).contentDocument?.activeElement
+      : active) as HTMLElement | null;
+    helpRef.current?.showModal();
+  };
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
   useHotkeys((e) => {
+    if (isHelpShortcut(e)) {
+      e.preventDefault();
+      openHelp();
+      return;
+    }
     if (!isSearchShortcut(e)) return;
     e.preventDefault();
     const input = document.getElementById('search-input') as HTMLInputElement | null;
@@ -26,6 +43,7 @@ export default function App() {
   return (
     <ToastProvider>
       <LiveEvents />
+      <ShortcutHelp dialogRef={helpRef} onClose={() => returnFocus.current?.focus()} />
       <header className="topbar">
         <strong className="brand">Lab Dashboard</strong>
         <nav aria-label="Main">
@@ -37,6 +55,9 @@ export default function App() {
           </NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </nav>
+        <button type="button" aria-keyshortcuts="Shift+/" onClick={openHelp}>
+          Help <kbd>?</kbd>
+        </button>
         <button type="button" onClick={toggle} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
           {theme === 'dark' ? 'Light' : 'Dark'}
         </button>

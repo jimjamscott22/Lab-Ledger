@@ -128,3 +128,12 @@ export function searchAll(db: Db, raw: string, limit = 25): SearchResult[] {
     return { slug: r.slug, kind: r.kind, labTitle: r.title, labNumber: r.lab_number, date: r.date, snippet };
   });
 }
+
+/** Complete slug set for list filtering, independent of ranked search pagination. */
+export function matchingLabSlugs(db: Db, raw: string): Set<string> {
+  const match = buildMatchQuery(raw);
+  if (!match) return new Set();
+  const rows = db.prepare('SELECT DISTINCT slug FROM search_idx WHERE search_idx MATCH ?')
+    .all(match) as { slug: string }[];
+  return new Set(rows.map((row) => row.slug));
+}

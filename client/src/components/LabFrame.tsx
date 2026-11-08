@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { isSearchShortcut } from '../lib/hotkeys';
+import { isHelpShortcut, isSearchShortcut } from '../lib/hotkeys';
 
 interface Props {
   slug: string;
@@ -30,13 +30,12 @@ export function LabFrame({ slug, title, checked, onToggle, onKey }: Props) {
     boxes.current = Array.from(doc.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
     boxes.current.forEach((box, i) => box.addEventListener('change', () => toggleRef.current(i, box.checked)));
     doc.addEventListener('keydown', onKey);
-    // Keys pressed inside the frame never bubble to the page, so hand the global search
-    // shortcut to the page's own window listener.
+    // Frame events never bubble to the page; forward global search and help keys.
     doc.addEventListener('keydown', (e) => {
-      if (!isSearchShortcut(e)) return;
+      if (!isSearchShortcut(e) && !isHelpShortcut(e)) return;
       e.preventDefault();
       window.dispatchEvent(
-        new KeyboardEvent('keydown', { key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, bubbles: true, cancelable: true }),
+        new KeyboardEvent('keydown', { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, bubbles: true, cancelable: true }),
       );
     });
     apply();
