@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { LAB_STATUSES, type LabStatus } from '@lab-ledger/shared';
 import { JournalEditor } from '../components/JournalEditor';
 import { LabFrame } from '../components/LabFrame';
+import { SectionReader } from '../components/SectionReader';
 import { StepList } from '../components/StepList';
 import { TicketEditor } from '../components/TicketEditor';
 import { api } from '../lib/api';
@@ -23,7 +24,16 @@ export default function LabViewer() {
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [status, setStatus] = useState<LabStatus>('not_started');
   const [focusStep, setFocusStep] = useState(0);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reading = searchParams.get('view') === 'sections';
+  const labHref = (target: string) => `/labs/${target}${reading ? '?view=sections' : ''}`;
+  const setReading = (value: boolean) =>
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value) next.set('view', 'sections');
+      else next.delete('view');
+      return next;
+    });
   const requestedTab = searchParams.get('tab');
   const [tab, setTab] = useState<'steps' | 'journal' | 'ticket'>(
     requestedTab === 'journal' || requestedTab === 'ticket' ? requestedTab : 'steps',
@@ -61,14 +71,15 @@ export default function LabViewer() {
   }
 
   const onKey = useHotkeys((e) => {
-    if (!data || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.defaultPrevented || !data || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey)
+      return;
     const target = e.target as HTMLElement | null;
     switch (e.key) {
       case 'ArrowLeft':
-        if (data.neighbors.prev) nav(`/labs/${data.neighbors.prev}`);
+        if (data.neighbors.prev) nav(labHref(data.neighbors.prev));
         break;
       case 'ArrowRight':
-        if (data.neighbors.next) nav(`/labs/${data.neighbors.next}`);
+        if (data.neighbors.next) nav(labHref(data.neighbors.next));
         break;
       case 'j':
         setFocusStep((i) => Math.min(i + 1, Math.max(total - 1, 0)));
@@ -103,7 +114,7 @@ export default function LabViewer() {
     <>
       <div className="viewer-head">
         {neighbors.prev ? (
-          <Link to={`/labs/${neighbors.prev}`} role="button" aria-label="Previous lab">
+          <Link to={labHref(neighbors.prev)} role="button" aria-label="Previous lab">
             ←
           </Link>
         ) : (
@@ -148,7 +159,7 @@ export default function LabViewer() {
           </div>
         </div>
         {neighbors.next ? (
-          <Link to={`/labs/${neighbors.next}`} role="button" aria-label="Next lab">
+          <Link to={labHref(neighbors.next)} role="button" aria-label="Next lab">
             →
           </Link>
         ) : (
@@ -171,17 +182,72 @@ export default function LabViewer() {
       ) : null}
 
       <div className="viewer">
-        {lab.missingFile ? (
-          <p className="card">The lab file is missing from the labs folder.</p>
-        ) : (
-          <LabFrame
-            slug={slug}
-            title={lab.title}
-            checked={checked}
-            onToggle={(i, v) => void toggle(i, v)}
-            onKey={onKey}
-          />
-        )}
+        <section className="lab-content" aria-label="Lab content">
+          <div
+            className="tabs"
+            role="tablist"
+            aria-label="Lab view"
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const next = event.key === 'Home' ? false : event.key === 'End' ? true : !reading;
+              setReading(next);
+              document.getElementById(next ? 'view-sections' : 'view-original')?.focus();
+            }}
+          >
+            <button
+              type="button"
+              role="tab"
+              id="view-original"
+              aria-selected={!reading}
+              aria-controls="view-panel-original"
+              tabIndex={reading ? -1 : 0}
+              onClick={() => setReading(false)}
+            >
+              Original
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="view-sections"
+              aria-selected={reading}
+              aria-controls="view-panel-sections"
+              tabIndex={reading ? 0 : -1}
+              onClick={() => setReading(true)}
+            >
+              Sections
+            </button>
+          </div>
+          <div
+            className="lab-source-panel"
+            role="tabpanel"
+            id="view-panel-original"
+            aria-labelledby="view-original"
+            hidden={reading}
+          >
+            {lab.missingFile ? (
+              <p className="card">The lab file is missing from the labs folder.</p>
+            ) : (
+              <LabFrame
+                slug={slug}
+                title={lab.title}
+                checked={checked}
+                onToggle={(i, v) => void toggle(i, v)}
+                onKey={onKey}
+              />
+            )}
+          </div>
+          <div
+            className="lab-reading-panel"
+            role="tabpanel"
+            id="view-panel-sections"
+            aria-labelledby="view-sections"
+            hidden={!reading}
+            tabIndex={0}
+          >
+            {reading ? <SectionReader key={slug} sections={lab.sections} slug={slug} /> : null}
+          </div>
+        </section>
         <section className="panel" aria-label="Lab notes and steps">
           <div className="tabs" role="tablist">
             <button
@@ -230,7 +296,12 @@ export default function LabViewer() {
               />
             </div>
             <div hidden={tab !== 'journal'}>
-              <JournalEditor key={slug} slug={slug} initial={data.journal} textareaRef={journalRef} />
+              <JournalEditor
+                key={slug}
+                slug={slug}
+                initial={data.journal}
+                textareaRef={journalRef}
+              />
             </div>
             <div hidden={tab !== 'ticket'}>
               <TicketEditor key={slug} slug={slug} />

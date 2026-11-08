@@ -57,6 +57,14 @@ This document records the repository state at the current pause point. The READM
   - Filters persist in the URL, support back/forward and reload, and include counts, reset, empty, loading, and error states.
   - Tags appear on lab cards; all matching labs are included without the ranked search endpoint's result cap.
 
+- Sections reading view:
+  - Original / Sections tabs above lab content; Original remains the default.
+  - Sanitized, theme-aware parsed sections in source order, with a table of contents, readable commands/tables, and expandable interview answers.
+  - `view=sections` persists across reload, history, and adjacent-lab navigation.
+  - Source controls are removed; the existing Steps panel remains the saved-progress interface. Switching modes retains progress and editor drafts.
+  - Empty sections explain the Original-view fallback; source styles, active content, and external image resources are excluded.
+  - Opening a lab no longer scrolls the mobile page to the checklist automatically.
+
 ## Persistence and migrations
 
 - SQLite schema version: 4.
@@ -70,21 +78,20 @@ This document records the repository state at the current pause point. The READM
 
 At this snapshot:
 
-- `npm test`: 158 tests passing across 27 test files.
+- `npm test`: 163 tests passing across 29 test files.
 - `npm run lint`: passing.
 - `npm run typecheck`: passing.
 - `npm run build`: passing.
-- `npm run e2e`: 47 browser tests passing.
-- Browser coverage includes Practice, Search, combined Labs filters, filter history/reset, shortcut help, focus restoration, and serious/critical accessibility checks in light and dark themes.
+- `npm run e2e`: 54 browser tests passing.
+- Browser coverage includes Practice, Search, combined Labs filters, filter history/reset, shortcut help, focus restoration, Sections reading and sanitization, and serious/critical accessibility checks in light and dark themes.
 
 ## Not implemented yet
 
 Remaining Phase 2 work:
 
 1. Portfolio export with Markdown, static HTML, print-to-PDF, and sensitive-data scanning.
-2. Sections reading view.
-3. Docker and Compose support.
-4. Nightly automatic backups.
+2. Docker and Compose support.
+3. Nightly automatic backups.
 
 Phase 3 remains unchanged: Obsidian sync, activity heatmap, Raspberry Pi deployment guide, PWA support, weekly review summaries, and skill-gap analysis.
 
@@ -92,6 +99,5 @@ Phase 3 remains unchanged: Obsidian sync, activity heatmap, Raspberry Pi deploym
 
 Suggested next slices, in order:
 
-1. Sections reading view.
-2. Portfolio export with the sensitive-data scan.
-3. Nightly backups, then Docker and Compose.
+1. Portfolio export with the sensitive-data scan.
+2. Nightly backups, then Docker and Compose.

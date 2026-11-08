@@ -10,7 +10,12 @@ interface Props {
 
 export function StepList({ steps, checked, focusIndex, onToggle }: Props) {
   const focused = useRef<HTMLLIElement>(null);
+  const previousFocus = useRef(focusIndex);
   useEffect(() => {
+    // Mounting the checklist must not pull a mobile reader past the lab content.
+    // Scroll when the selected step changes (for example, with j/k).
+    if (previousFocus.current === focusIndex) return;
+    previousFocus.current = focusIndex;
     focused.current?.scrollIntoView({ block: 'nearest' });
   }, [focusIndex]);
 

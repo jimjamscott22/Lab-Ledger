@@ -107,3 +107,21 @@ kbd { font: inherit; font-size: 0.75rem; border: 1px solid currentColor; border-
   .lab-filters label { flex: 1 1 150px; }
   .lab-filters .lab-text-filter { flex-basis: 100%; }
 }
+.lab-content { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.lab-source-panel:not([hidden]) { display: flex; flex: 1; min-height: 0; }
+.lab-content iframe { border: 0; border-radius: 0; }
+.lab-reading-panel { overflow: auto; padding: 16px; }
+.section-reader { max-width: 75ch; margin: 0 auto; overflow-wrap: anywhere; }
+.section-reader > section { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 8px; }
+.section-reader h2 { scroll-margin-top: 16px; }
+.section-reader nav ol { padding-left: 24px; }
+.section-reader nav li { margin: 6px 0; }
+.section-reader pre { max-width: 100%; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-wrap: normal; }
+.section-reader table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.section-reader th, .section-reader td { border: 1px solid var(--border); padding: 6px 10px; }
+.section-reader img { max-width: 100%; height: auto; }
+.section-reader details { border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin: 12px 0; }
+.section-reader summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 767px) {
+  .lab-reading-panel { overflow: visible; }
+}

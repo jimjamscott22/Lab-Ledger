@@ -241,6 +241,12 @@ The Labs page combines status, topic, tag, inclusive From/To dates, notes presen
 
 Press `?` outside a text field, or select **Help**, to see global, viewer, and practice shortcuts. `Esc` or **Close** dismisses help and returns focus to the previous control. Page shortcuts pause while help is open. `Ctrl/Cmd+K` opens the Search page.
 
+## Sections reading view
+
+Open a lab and choose **Sections** above the lab content for a theme-aware reading layout. The contents links jump to each parsed section; interview answers expand in place, and commands and tables scroll within the page width. Choose **Original** to return to the sandboxed source document. Original is the default, and `?view=sections` retains the reading view on reload and when moving to adjacent labs.
+
+Sections is a reading view: use the **Steps** panel to save progress. Switching views keeps progress and editor drafts. Source styles and form controls are removed; source links appear as text, and only embedded PNG/JPEG/WebP images are shown. Labs without parsed sections explain how to return to Original.
+
 ## Architecture
 
 An npm-workspaces monorepo:
@@ -335,9 +341,9 @@ Conventions: TypeScript strict mode, ESM, Prettier (single quotes, 100 columns),
 ## Testing
 
 ```bash
-npm test                               # 158 unit and integration tests
+npm test                               # 163 unit and integration tests
 npx playwright install --with-deps chromium   # one-time, for E2E
-npm run e2e                            # 47 browser tests
+npm run e2e                            # 54 browser tests
 npm run lint && npm run typecheck
 ```
 
@@ -370,7 +376,7 @@ The E2E suite runs against a throwaway copy of the fixtures on port 4318 (`.e2e/
 
 **Phase 1 (done):** ingestion and live reload, list and viewer, step progress and status, journal with screenshots, home stats, JSON and Markdown backup.
 
-**Phase 2 (underway):** ticket write-up editor, interview practice with spaced repetition, full-text search with Cmd/Ctrl+K, shortcut help on `?`, and richer lab filters and tags (done); next are portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, a Sections reading view, Docker and compose, and nightly automatic backups.
+**Phase 2 (underway):** ticket write-up editor, interview practice with spaced repetition, full-text search with Cmd/Ctrl+K, shortcut help on `?`, richer lab filters and tags, and the Sections reading view (done); next are portfolio export (Markdown, static HTML, print-to-PDF) with a sensitive-data scan, Docker and compose, and nightly automatic backups.
 
 **Phase 3 (stretch):** Obsidian sync, a calendar heatmap, a Raspberry Pi deploy guide (Caddy and Tailscale), a PWA for offline phone use, a weekly review summary, and a skill-gap view.
 
