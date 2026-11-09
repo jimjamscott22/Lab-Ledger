@@ -54,3 +54,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_idx USING fts5(
   slug UNINDEXED, kind UNINDEXED, title, body, tokenize = 'porter unicode61'
 );
 `;
+
+export const SCHEMA_V5 = `
+CREATE TABLE IF NOT EXISTS restore_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  phase TEXT NOT NULL
+);
+`;

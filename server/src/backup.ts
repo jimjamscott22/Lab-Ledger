@@ -8,50 +8,70 @@ import { sniffImage, MAX_BYTES } from './routes/attachments';
 
 export class BackupValidationError extends Error {}
 
-const RESTORE_STATE_FILE = 'attachments.restore-state.json';
-type RestorePhase = 'staged' | 'committed';
+// Written by restores from before the phase moved into SQLite; still
+// honoured on startup so an interrupted legacy restore can be reconciled.
+const LEGACY_RESTORE_STATE_FILE = 'attachments.restore-state.json';
 
-function writeRestoreState(dataDir: string, phase: RestorePhase): void {
-  fs.writeFileSync(path.join(dataDir, RESTORE_STATE_FILE), JSON.stringify({ phase }));
+function readRestorePhase(db: Db): string | null {
+  const row = db.prepare('SELECT phase FROM restore_state WHERE id = 1').get() as { phase: string } | undefined;
+  return row?.phase ?? null;
 }
 
-function readRestoreState(dataDir: string): RestorePhase | null {
+function readLegacyRestorePhase(dataDir: string): 'staged' | 'committed' | null {
   try {
-    const parsed = JSON.parse(fs.readFileSync(path.join(dataDir, RESTORE_STATE_FILE), 'utf8')) as { phase?: unknown };
+    const parsed = JSON.parse(fs.readFileSync(path.join(dataDir, LEGACY_RESTORE_STATE_FILE), 'utf8')) as { phase?: unknown };
     return parsed.phase === 'staged' || parsed.phase === 'committed' ? parsed.phase : null;
   } catch {
     return null;
   }
 }
 
-/**
- * Brings the attachments directory back in line with the database after a
- * restore that was interrupted mid-flight. A restore interrupted before its
- * database transaction commits keeps the old files; one interrupted after
- * the commit is finished by putting the staged files in place.
- */
-export function reconcileRestore(dataDir: string): void {
+function finishAttachmentSwap(dataDir: string): void {
   const root = path.join(dataDir, 'attachments');
   const staging = path.join(dataDir, 'attachments.restore-new');
   const previous = path.join(dataDir, 'attachments.restore-old');
-  const phase = readRestoreState(dataDir);
-  if (!phase) {
-    // Legacy/interrupted state without a marker: never leave the live tree missing.
-    if (!fs.existsSync(root) && fs.existsSync(previous)) fs.renameSync(previous, root);
+  if (fs.existsSync(staging)) {
+    if (fs.existsSync(root) && !fs.existsSync(previous)) fs.renameSync(root, previous);
+    if (!fs.existsSync(root)) fs.renameSync(staging, root);
+  }
+  fs.rmSync(previous, { recursive: true, force: true });
+  fs.rmSync(staging, { recursive: true, force: true });
+}
+
+/**
+ * Brings the attachments directory back in line with the database after a
+ * restore that was interrupted mid-flight. The restore records
+ * 'files-pending' inside the same SQLite transaction that replaces the
+ * data, so the record and the commit are atomic: if the row is present,
+ * the database already points at the staged files and the swap is
+ * finished here; if it is absent, the transaction rolled back and any
+ * staged files are discarded.
+ */
+export function reconcileRestore(db: Db, dataDir: string): void {
+  const root = path.join(dataDir, 'attachments');
+  const staging = path.join(dataDir, 'attachments.restore-new');
+  const previous = path.join(dataDir, 'attachments.restore-old');
+
+  if (readRestorePhase(db) === 'files-pending') {
+    finishAttachmentSwap(dataDir);
+    db.prepare('DELETE FROM restore_state WHERE id = 1').run();
+    fs.rmSync(path.join(dataDir, LEGACY_RESTORE_STATE_FILE), { force: true });
     return;
   }
-  if (phase === 'staged') {
-    fs.rmSync(staging, { recursive: true, force: true });
-    if (!fs.existsSync(root) && fs.existsSync(previous)) fs.renameSync(previous, root);
-  } else {
-    if (fs.existsSync(staging)) {
-      if (fs.existsSync(root) && !fs.existsSync(previous)) fs.renameSync(root, previous);
-      if (!fs.existsSync(root)) fs.renameSync(staging, root);
-    }
-    fs.rmSync(previous, { recursive: true, force: true });
+
+  const legacy = readLegacyRestorePhase(dataDir);
+  if (legacy === 'committed') {
+    finishAttachmentSwap(dataDir);
+  } else if (legacy === 'staged') {
     fs.rmSync(staging, { recursive: true, force: true });
   }
-  fs.rmSync(path.join(dataDir, RESTORE_STATE_FILE), { force: true });
+  fs.rmSync(path.join(dataDir, LEGACY_RESTORE_STATE_FILE), { force: true });
+
+  if (!legacy) {
+    // Interrupted before any commit record: staged files are orphans.
+    fs.rmSync(staging, { recursive: true, force: true });
+    if (!fs.existsSync(root) && fs.existsSync(previous)) fs.renameSync(previous, root);
+  }
 }
 
 interface DecodedAttachment {
@@ -61,10 +81,14 @@ interface DecodedAttachment {
 
 function decodeAttachments(b: BackupV1): DecodedAttachment[] {
   return b.attachments.map((a) => {
-    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(a.dataBase64)) {
+    // Decode, then require an exact canonical re-encode. Buffer.from is
+    // lenient about invalid characters, so the round trip is what rejects
+    // them — and unlike a quantified regex it cannot overflow the stack on
+    // multi-megabyte payloads.
+    const data = Buffer.from(a.dataBase64, 'base64');
+    if (data.toString('base64') !== a.dataBase64) {
       throw new BackupValidationError(`Attachment ${a.id}: data is not valid base64`);
     }
-    const data = Buffer.from(a.dataBase64, 'base64');
     if (data.length !== a.bytes) {
       throw new BackupValidationError(`Attachment ${a.id}: expected ${a.bytes} bytes, decoded ${data.length}`);
     }
@@ -158,7 +182,7 @@ export function importBackup(db: Db, dataDir: string, b: BackupV1): void {
   // Validate every attachment before touching the database or the live files.
   const decoded = decodeAttachments(b);
 
-  reconcileRestore(dataDir);
+  reconcileRestore(db, dataDir);
   fs.rmSync(staging, { recursive: true, force: true });
   fs.rmSync(previous, { recursive: true, force: true });
   fs.mkdirSync(dataDir, { recursive: true });
@@ -171,7 +195,6 @@ export function importBackup(db: Db, dataDir: string, b: BackupV1): void {
       fs.writeFileSync(path.join(dir, meta.fileName), data);
     }
     fs.mkdirSync(staging, { recursive: true });
-    writeRestoreState(dataDir, 'staged');
 
     db.transaction(() => {
       for (const t of [
@@ -212,20 +235,24 @@ export function importBackup(db: Db, dataDir: string, b: BackupV1): void {
       const insAct = db.prepare('INSERT INTO activity (day,slug,kind,at) VALUES (?,?,?,?)');
       b.activity.forEach((r) => insAct.run(r.day, r.slug, r.kind, r.at));
       reindexNotes(db);
+      // Recorded inside the transaction, so this marker and the restored
+      // data commit (or roll back) together. reconcileRestore() uses it to
+      // finish the attachment swap after a crash in the window below.
+      db.prepare(
+        `INSERT INTO restore_state (id, phase) VALUES (1, 'files-pending')
+         ON CONFLICT(id) DO UPDATE SET phase = excluded.phase`,
+      ).run();
     })();
     committed = true;
-    writeRestoreState(dataDir, 'committed');
 
     // The database now points at the staged files; swap them into place.
-    // reconcileRestore() can finish this step if the process dies here.
     if (fs.existsSync(root)) fs.renameSync(root, previous);
     fs.renameSync(staging, root);
     fs.rmSync(previous, { recursive: true, force: true });
-    fs.rmSync(path.join(dataDir, RESTORE_STATE_FILE), { force: true });
+    db.prepare('DELETE FROM restore_state WHERE id = 1').run();
   } catch (err) {
     if (!committed) {
       fs.rmSync(staging, { recursive: true, force: true });
-      fs.rmSync(path.join(dataDir, RESTORE_STATE_FILE), { force: true });
     }
     throw err;
   }

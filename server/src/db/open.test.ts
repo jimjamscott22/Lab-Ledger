@@ -30,7 +30,7 @@ describe('database migrations', () => {
     old.close();
 
     const db = openDb(file);
-    expect(db.pragma('user_version', { simple: true })).toBe(4);
+    expect(db.pragma('user_version', { simple: true })).toBe(5);
     expect(searchAll(db, 'ipconfig').map((r) => r.kind)).toEqual(['lab']);
     expect(searchAll(db, 'flushdns').map((r) => r.kind)).toEqual(['journal']);
     expect(searchAll(db, 'ttl').map((r) => r.kind)).toEqual(['ticket']);
@@ -46,7 +46,7 @@ describe('database migrations', () => {
     oldDb.close();
 
     const db = openDb(file);
-    expect(db.pragma('user_version', { simple: true })).toBe(4);
+    expect(db.pragma('user_version', { simple: true })).toBe(5);
     expect(
       db
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tickets'")
