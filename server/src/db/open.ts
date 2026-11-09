@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { rebuildSearchIndex } from '../search';
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4 } from './schema';
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5 } from './schema';
 
 export type Db = Database.Database;
 
@@ -29,6 +29,10 @@ export function openDb(file: string): Db {
       rebuildSearchIndex(db);
       db.pragma('user_version = 4');
     })();
+  }
+  if (version < 5) {
+    db.exec(SCHEMA_V5);
+    db.pragma('user_version = 5');
   }
   return db;
 }

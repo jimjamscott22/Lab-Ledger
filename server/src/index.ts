@@ -6,9 +6,11 @@ import { LabEvents } from './events';
 import { createIngestService } from './ingest/service';
 import { watchLabs } from './ingest/watch';
 import { startScheduler } from './scheduler';
+import { reconcileRestore } from './backup';
 
 const config = loadConfig();
 const db = openDb(path.join(config.dataDir, 'app.db'));
+reconcileRestore(db, config.dataDir);
 const events = new LabEvents();
 const ingest = createIngestService({ db, labsDir: config.labsDir, events });
 

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { makeTestApp } from './testing-app';
 import { openDb } from './db/open';
-import { exportBackup, importBackup, backupToMarkdown } from './backup';
+import { exportBackup, importBackup, backupToMarkdown, reconcileRestore } from './backup';
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16, 7)]);
 
@@ -84,6 +84,136 @@ describe('backup', () => {
     expect(fs.readdirSync(path.join(dataDir, 'attachments', 'ad-user-onboarding'))).toEqual(keptFiles);
     expect(fs.existsSync(path.join(dataDir, 'attachments.restore-new'))).toBe(false);
     expect(fs.existsSync(path.join(dataDir, 'attachments.restore-old'))).toBe(false);
+  });
+
+  it('rejects attachments whose bytes do not match their metadata, leaving data untouched', async () => {
+    const { app, ctx, dataDir } = await makeTestApp();
+    const boundary = 'b';
+    const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`), PNG, Buffer.from(`\r\n--${boundary}--\r\n`)]);
+    await app.inject({ method: 'POST', url: '/api/labs/ad-user-onboarding/attachments', payload: body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
+    const before = exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'));
+    const keptFiles = fs.readdirSync(path.join(dataDir, 'attachments', 'ad-user-onboarding'));
+
+    const wrongLength = { ...before, attachments: [{ ...before.attachments[0], bytes: before.attachments[0].bytes + 1 }] };
+    expect(() => importBackup(ctx.db, dataDir, wrongLength)).toThrow(/attachment/i);
+
+    const wrongType = { ...before, attachments: [{ ...before.attachments[0], mime: 'image/jpeg' as const, fileName: before.attachments[0].fileName.replace(/\.png$/, '.jpg') }] };
+    expect(() => importBackup(ctx.db, dataDir, wrongType)).toThrow(/attachment/i);
+
+    expect(exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'))).toEqual(before);
+    expect(fs.readdirSync(path.join(dataDir, 'attachments', 'ad-user-onboarding'))).toEqual(keptFiles);
+  });
+
+  it('rejects a mismatched attachment with 400 via the HTTP API', async () => {
+    const { app, ctx, dataDir } = await makeTestApp();
+    const boundary = 'b';
+    const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`), PNG, Buffer.from(`\r\n--${boundary}--\r\n`)]);
+    await app.inject({ method: 'POST', url: '/api/labs/ad-user-onboarding/attachments', payload: body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
+    const before = exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'));
+    const bad = { ...before, attachments: [{ ...before.attachments[0], bytes: 1 }] };
+    const res = await app.inject({ method: 'POST', url: '/api/restore', payload: bad });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('restores a ~5 MiB attachment (the app’s own export size class)', () => {
+    const big = Buffer.alloc(5 * 1024 * 1024, 7);
+    PNG.copy(big, 0);
+    const db = openDb(':memory:');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'big-restore-'));
+    const backup: Parameters<typeof importBackup>[2] = {
+      version: 1,
+      exportedAt: '2026-10-29T00:00:00Z',
+      labState: [],
+      stepProgress: [],
+      journals: [],
+      tickets: [],
+      questionReviews: [],
+      activity: [],
+      attachments: [
+        {
+          id: '33333333-3333-3333-3333-333333333333',
+          slug: 'ad-user-onboarding',
+          fileName: '33333333-3333-3333-3333-333333333333.png',
+          mime: 'image/png',
+          bytes: big.length,
+          createdAt: '2026-10-29T00:00:00Z',
+          dataBase64: big.toString('base64'),
+        },
+      ],
+    };
+    expect(() => importBackup(db, dir, backup)).not.toThrow();
+    const written = fs.readFileSync(path.join(dir, 'attachments', 'ad-user-onboarding', '33333333-3333-3333-3333-333333333333.png'));
+    expect(written.equals(big)).toBe(true);
+  });
+
+  it('survives a crash between the database commit and the attachment swap', async () => {
+    const { app, ctx, dataDir } = await makeTestApp();
+    const boundary = 'b';
+    const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`), PNG, Buffer.from(`\r\n--${boundary}--\r\n`)]);
+    await app.inject({ method: 'POST', url: '/api/labs/ad-user-onboarding/attachments', payload: body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
+    const before = exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'));
+
+    const newPng = Buffer.concat([PNG, Buffer.from([1, 2, 3])]);
+    const replacement = {
+      ...before,
+      journals: [{ slug: 'ad-user-onboarding', bodyMd: 'restored', timeTakenMin: 1, difficulty: 1, confidence: 1, updatedAt: null }],
+      attachments: [
+        {
+          ...before.attachments[0],
+          id: '44444444-4444-4444-4444-444444444444',
+          fileName: '44444444-4444-4444-4444-444444444444.png',
+          bytes: newPng.length,
+          dataBase64: newPng.toString('base64'),
+        },
+      ],
+    };
+
+    // Kill the process (simulated) at the first rename after the DB commit:
+    // the transaction has committed, but the staged files are not yet live.
+    const realRename = fs.renameSync;
+    let crashed = false;
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation(((...args: Parameters<typeof fs.renameSync>) => {
+      if (!crashed) {
+        crashed = true;
+        throw new Error('simulated crash after commit');
+      }
+      return realRename(...args);
+    }) as typeof fs.renameSync);
+    try {
+      expect(() => importBackup(ctx.db, dataDir, replacement)).toThrow(/simulated crash/);
+    } finally {
+      spy.mockRestore();
+    }
+
+    // The commit and its recovery record landed together: startup recovery
+    // must finish the swap, not delete the restored attachments.
+    expect(ctx.db.prepare('SELECT phase FROM restore_state WHERE id = 1').get()).toEqual({ phase: 'files-pending' });
+    reconcileRestore(ctx.db, dataDir);
+
+    const restored = exportBackup(ctx.db, dataDir, new Date('2026-10-29T00:00:00Z'));
+    expect(restored.journals[0].bodyMd).toBe('restored');
+    expect(restored.attachments).toHaveLength(1);
+    expect(restored.attachments[0].id).toBe('44444444-4444-4444-4444-444444444444');
+    expect(Buffer.from(restored.attachments[0].dataBase64, 'base64').equals(newPng)).toBe(true);
+    expect(ctx.db.prepare('SELECT phase FROM restore_state WHERE id = 1').get()).toBeUndefined();
+    expect(fs.existsSync(path.join(dataDir, 'attachments.restore-new'))).toBe(false);
+    expect(fs.existsSync(path.join(dataDir, 'attachments.restore-old'))).toBe(false);
+  });
+
+  it('discards staged files from a restore interrupted before the database commit', () => {
+    const db = openDb(':memory:');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reconcile-'));
+    const root = path.join(dir, 'attachments');
+    const staging = path.join(dir, 'attachments.restore-new');
+    fs.mkdirSync(path.join(root, 'lab-a'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'lab-a', 'old.png'), 'old');
+    fs.mkdirSync(path.join(staging, 'lab-a'), { recursive: true });
+    fs.writeFileSync(path.join(staging, 'lab-a', 'new.png'), 'new');
+
+    reconcileRestore(db, dir);
+
+    expect(fs.readFileSync(path.join(root, 'lab-a', 'old.png'), 'utf8')).toBe('old');
+    expect(fs.existsSync(staging)).toBe(false);
   });
 
   it('restore via the HTTP API validates input', async () => {

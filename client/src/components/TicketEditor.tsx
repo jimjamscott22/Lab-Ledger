@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { TicketFields } from '@lab-ledger/shared';
 import { api } from '../lib/api';
+import { useAutosave } from '../lib/useAutosave';
 
 const FIELD_LABELS: { key: keyof TicketFields; label: string; multiline?: boolean }[] = [
   { key: 'ticketNumber', label: 'Ticket #' },
@@ -17,10 +18,11 @@ const FIELD_LABELS: { key: keyof TicketFields; label: string; multiline?: boolea
 export function TicketEditor({ slug }: { slug: string }) {
   const [fields, setFields] = useState<TicketFields | null>(null);
   const [error, setError] = useState('');
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const latest = useRef<TicketFields | null>(null);
-  const dirty = useRef(false);
-  latest.current = fields;
+  const { saveState, markDirty } = useAutosave({
+    value: fields,
+    save: (value) => api.saveTicket(slug, value),
+    saveOnLeave: (value) => api.saveTicketOnLeave(slug, value),
+  });
 
   useEffect(() => {
     let active = true;
@@ -37,49 +39,11 @@ export function TicketEditor({ slug }: { slug: string }) {
     };
   }, [slug]);
 
-  const save = async () => {
-    if (!latest.current) return;
-    dirty.current = false;
-    setSaveState('saving');
-    try {
-      await api.saveTicket(slug, latest.current);
-      setSaveState('saved');
-    } catch {
-      dirty.current = true;
-      setSaveState('error');
-    }
-  };
-
-  useEffect(() => {
-    if (!dirty.current) return;
-    const timer = setTimeout(() => void save(), 800);
-    return () => clearTimeout(timer);
-  }, [fields]);
-
-  useEffect(() => {
-    const flush = () => {
-      if (!dirty.current || !latest.current) return;
-      dirty.current = false;
-      api.saveTicketOnLeave(slug, latest.current);
-    };
-    const onHide = () => {
-      if (document.visibilityState === 'hidden') flush();
-    };
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', onHide);
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      document.removeEventListener('visibilitychange', onHide);
-      flush();
-    };
-  }, [slug]);
-
   if (error) return <p role="alert">Could not load ticket: {error}</p>;
   if (!fields) return <p>Loading ticket…</p>;
 
   const change = (key: keyof TicketFields, value: string) => {
-    dirty.current = true;
-    setSaveState('idle');
+    markDirty();
     setFields((current) => (current ? { ...current, [key]: value } : current));
   };
 

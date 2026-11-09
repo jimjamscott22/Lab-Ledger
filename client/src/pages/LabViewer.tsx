@@ -39,10 +39,26 @@ export default function LabViewer() {
     requestedTab === 'journal' || requestedTab === 'ticket' ? requestedTab : 'steps',
   );
   const [allChecked, setAllChecked] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const journalRef = useRef<HTMLTextAreaElement>(null);
+  const mutationChain = useRef<Promise<void>>(Promise.resolve());
+  // Last state the server actually confirmed. Failed mutations roll back
+  // to this — never to "undo my own click", which composes wrongly when
+  // several optimistic changes are queued and more than one fails.
+  const confirmedChecked = useRef<Set<number>>(new Set());
+  const confirmedStatus = useRef<LabStatus>('not_started');
+
+  // Serialize step/status mutations so rapid clicks reach the server in
+  // click order, and roll the optimistic UI back when a mutation fails.
+  const enqueueMutation = (run: () => Promise<void>) => {
+    mutationChain.current = mutationChain.current.then(run, run);
+    return mutationChain.current;
+  };
 
   useEffect(() => {
     if (!data) return;
+    confirmedChecked.current = new Set(data.checked);
+    confirmedStatus.current = data.state.status;
     setChecked(new Set(data.checked));
     setStatus(data.state.status);
     setFocusStep(0);
@@ -58,16 +74,40 @@ export default function LabViewer() {
       else next.delete(index);
       return next;
     });
-    const res = await api.toggleStep(slug, index, value);
-    setStatus(res.status);
-    setAllChecked(res.allChecked && res.status !== 'completed');
+    await enqueueMutation(async () => {
+      try {
+        const res = await api.toggleStep(slug, index, value);
+        confirmedChecked.current = new Set(res.checked);
+        confirmedStatus.current = res.status;
+        setChecked(new Set(res.checked));
+        setStatus(res.status);
+        setAllChecked(res.allChecked && res.status !== 'completed');
+        setSaveError('');
+      } catch {
+        setChecked(new Set(confirmedChecked.current));
+        setStatus(confirmedStatus.current);
+        setAllChecked(
+          total > 0 && confirmedChecked.current.size === total && confirmedStatus.current !== 'completed',
+        );
+        setSaveError('Could not save that step change. It has been undone.');
+      }
+    });
   }
 
   async function changeStatus(next: LabStatus) {
     setStatus(next);
-    const state = await api.setStatus(slug, next);
-    setStatus(state.status);
-    if (next === 'completed') setAllChecked(false);
+    await enqueueMutation(async () => {
+      try {
+        const state = await api.setStatus(slug, next);
+        confirmedStatus.current = state.status;
+        setStatus(state.status);
+        if (next === 'completed') setAllChecked(false);
+        setSaveError('');
+      } catch {
+        setStatus(confirmedStatus.current);
+        setSaveError('Could not save that status change. It has been undone.');
+      }
+    });
   }
 
   const onKey = useHotkeys((e) => {
@@ -168,6 +208,12 @@ export default function LabViewer() {
           </button>
         )}
       </div>
+
+      {saveError ? (
+        <div className="banner" role="alert">
+          <span>{saveError}</span>
+        </div>
+      ) : null}
 
       {allChecked ? (
         <div className="banner" role="status">
