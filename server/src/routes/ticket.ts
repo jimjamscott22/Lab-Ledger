@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { load } from 'cheerio';
 import { TicketBody, type Ticket, type TicketFields } from '@lab-ledger/shared';
 import type { AppContext } from '../app';
 import * as repo from '../db/repo';
+import { blockText } from '../lib/text';
 
 const SLUG_RE = /^[a-z0-9-]+$/;
 
@@ -18,17 +18,13 @@ const emptyFields = (): TicketFields => ({
   followUp: '',
 });
 
-function textFromHtml(html: string): string {
-  return load(`<body>${html}</body>`)('body').text().replace(/\s+/g, ' ').trim();
-}
-
 function starterTicket(slug: string, ctx: AppContext): Ticket | null {
   const lab = repo.getLab(ctx.db, slug);
   if (!lab) return null;
   const fields = emptyFields();
   fields.issue = lab.scenarioText ?? '';
   const template = lab.sections.find((section) => section.kind === 'ticketTemplate');
-  fields.troubleshootingSteps = template ? textFromHtml(template.html) : '';
+  fields.troubleshootingSteps = template ? blockText(template.html) : '';
   return { fields, updatedAt: null };
 }
 

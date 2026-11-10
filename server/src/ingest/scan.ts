@@ -4,7 +4,7 @@ import type { Lab } from '@lab-ledger/shared';
 import type { Db } from '../db/open';
 import * as repo from '../db/repo';
 import { sha256 } from '../lib/hash';
-import { LAB_FILE_RE, parseLabHtml } from './parse';
+import { LAB_FILE_RE, PARSER_VERSION, parseLabHtml } from './parse';
 import { parseLabLog } from './labLog';
 import { classifyTopics } from './topics';
 import { remapProgress } from './stepMatch';
@@ -46,7 +46,8 @@ export function scanLabs(db: Db, labsDir: string, now: () => Date = () => new Da
         result.warnings.push(`Could not read ${name}: ${(err as Error).message}`);
         continue;
       }
-      const fileHash = sha256(buf);
+      // The parser version is part of the hash so a parser fix re-parses unchanged files.
+      const fileHash = sha256(Buffer.concat([Buffer.from(`parser:${PARSER_VERSION}\n`), buf]));
       const prev = repo.getLab(db, slug);
       const before = prev ? JSON.stringify(prev) : null;
 

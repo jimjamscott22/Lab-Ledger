@@ -1,6 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { DueQuestion, QuestionReview, Stats } from '@lab-ledger/shared';
 import { makeTestApp } from './testing-app';
+import { SAMPLE_LAB_FILE, SAMPLE_LAB_HTML } from './ingest/regression-sample';
 
 describe('interview practice API', () => {
   it('lists unreviewed questions as due and filters them by topic', async () => {
@@ -18,6 +21,19 @@ describe('interview practice API', () => {
     expect(windows).toHaveLength(3);
     expect(windows[0].slug).toBe('windows-wont-wake-from-sleep');
     expect((await app.inject('/api/questions/due?topic=unknown')).statusCode).toBe(400);
+  });
+
+  it('does not serve <details> blocks outside Interview Questions as questions', async () => {
+    const { app, ctx, labsDir } = await makeTestApp();
+    fs.writeFileSync(path.join(labsDir, SAMPLE_LAB_FILE), SAMPLE_LAB_HTML);
+    ctx.ingest.rescan();
+    const due = ((await app.inject('/api/questions/due')).json() as DueQuestion[]).filter(
+      (q) => q.slug === 'sample-onboarding',
+    );
+    expect(due.map((q) => [q.questionIndex, q.question])).toEqual([
+      [0, "1. A user says they're locked out. What do you check?"],
+      [1, '2. Why assign permissions to a group?'],
+    ]);
   });
 
   it('schedules a reviewed question and removes it from today’s deck', async () => {

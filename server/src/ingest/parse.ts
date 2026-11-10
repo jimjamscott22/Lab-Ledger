@@ -1,8 +1,12 @@
 import * as cheerio from 'cheerio';
 import type { Lab, ParseStatus, Question, Section, Step } from '@lab-ledger/shared';
 import { sha1 } from '../lib/hash';
+import { blockText } from '../lib/text';
 
 export const LAB_FILE_RE = /^(\d{4}-\d{2}-\d{2})-([a-z0-9-]+)\.html$/;
+
+// Bump when parsing output changes, so labs already in the database get re-parsed on the next scan.
+export const PARSER_VERSION = 2;
 
 export type ParsedLab = Omit<Lab, 'topicLabel' | 'topics' | 'fileHash' | 'ingestedAt' | 'missingFile'>;
 
@@ -104,19 +108,27 @@ function parseBody(html: string, id: { date: string; slug: string; fileName: str
   }
 
   const scenarioSection = sections.find((s) => s.kind === 'scenario');
-  const scenarioText = scenarioSection ? textOf(scenarioSection.html) : norm($('div.card.ticket').first().text()) || null;
+  const ticketCard = $('div.card.ticket').first();
+  const scenarioText = scenarioSection
+    ? blockText(scenarioSection.html)
+    : (ticketCard.length ? blockText($.html(ticketCard)) : '') || null;
 
   const prereq = sections.find((s) => s.kind === 'prerequisites');
   const $p = prereq ? cheerio.load(prereq.html) : null;
   const prerequisites = $p ? $p('li').toArray().map((li) => norm($p(li).text())) : [];
 
-  const questions: Question[] = [];
-  $('details').each((i, el) => {
+  // Questions come only from the Interview Questions section, so other <details> blocks
+  // (setup tips, hints) are not served as flashcards. Labs without that heading keep every <details>.
+  const interviewHeading = $('h2').filter((_, el) => classify(norm($(el).text())) === 'interview').first();
+  const detailsEls = interviewHeading.length
+    ? interviewHeading.nextUntil('h2').toArray().flatMap((n) => ($(n).is('details') ? [n] : $(n).find('details').toArray()))
+    : $('details').toArray();
+  const questions: Question[] = detailsEls.map((el, index) => {
     const d = $(el);
     const summary = d.children('summary').first();
     const question = norm(summary.text());
     summary.remove();
-    questions.push({ index: i, question, answerHtml: (d.html() ?? '').trim() });
+    return { index, question, answerHtml: (d.html() ?? '').trim() };
   });
 
   const hasTitle = title.length > 0;
