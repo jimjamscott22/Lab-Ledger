@@ -1,5 +1,10 @@
 # Lab-Ledger (Lab Dashboard)
 
+<!-- shell-pet -->
+[![shell-pet](https://shell-pet.vercel.app/api/pet/jimjamscott22/Lab-Ledger.svg)](https://github.com/jimjamscott22/Lab-Ledger)
+<!-- /shell-pet -->
+
+
 A personal, local-first web app for browsing the daily IT labs committed in `labs/` and recording what I did in each one. I'm a recent Information Science grad aiming for entry-level IT Support, Help Desk, or junior sysadmin roles. The app turns the labs into a practice log, an interview-prep tool, and a portfolio.
 
 Everything runs on your own machine. There is no account, no cloud service, and no network call at runtime. Your progress and notes live in a single SQLite file that is easy to back up.
