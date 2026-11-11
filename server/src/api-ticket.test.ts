@@ -1,6 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Ticket, TicketFields } from '@lab-ledger/shared';
 import { makeTestApp } from './testing-app';
+import { SAMPLE_LAB_FILE, SAMPLE_LAB_HTML } from './ingest/regression-sample';
 
 const completeTicket: TicketFields = {
   ticketNumber: 'INC-1042',
@@ -23,6 +26,18 @@ describe('ticket API', () => {
     expect(ticket.updatedAt).toBeNull();
     expect(ticket.fields.issue).toContain('User reports a problem');
     expect(ticket.fields.troubleshootingSteps).toContain('Issue, Impact, Root cause, Resolution');
+  });
+
+  it('prefills the issue with one line per block element', async () => {
+    const { app, ctx, labsDir } = await makeTestApp();
+    fs.writeFileSync(path.join(labsDir, SAMPLE_LAB_FILE), SAMPLE_LAB_HTML);
+    ctx.ingest.rescan();
+    const ticket = (await app.inject('/api/labs/sample-onboarding/ticket')).json() as Ticket;
+    expect(ticket.fields.issue).toBe(
+      'Skill: Create users with the ActiveDirectory PowerShell module.\n' +
+        'Ticket #10423 – Priority: Normal\n' +
+        '"Hi IT, our new hire Taylor Reed starts Monday."',
+    );
   });
 
   it('saves and reloads every ticket field', async () => {

@@ -87,3 +87,28 @@ describe('parseLabHtml', () => {
     expect(titleFromSlug('windows-wont-wake')).toBe('Windows Wont Wake');
   });
 });
+
+describe('parseLabHtml regressions', () => {
+  it('only takes interview questions from the Interview Questions section', async () => {
+    const { SAMPLE_LAB_HTML, SAMPLE_LAB_FILE } = await import('./regression-sample');
+    const lab = parseLabHtml(SAMPLE_LAB_HTML, SAMPLE_LAB_FILE);
+    expect(lab.questions.map((q) => q.question)).toEqual([
+      "1. A user says they're locked out. What do you check?",
+      '2. Why assign permissions to a group?',
+    ]);
+    expect(lab.questions.map((q) => q.index)).toEqual([0, 1]);
+    expect(lab.questions[0].answerHtml).toBe('<p>Check LockedOut.</p>');
+  });
+
+  it('keeps line breaks between block elements in the scenario text', async () => {
+    const { SAMPLE_LAB_HTML, SAMPLE_LAB_FILE } = await import('./regression-sample');
+    const lab = parseLabHtml(SAMPLE_LAB_HTML, SAMPLE_LAB_FILE);
+    expect(lab.scenarioText).toBe(
+      [
+        'Skill: Create users with the ActiveDirectory PowerShell module.',
+        'Ticket #10423 – Priority: Normal',
+        '"Hi IT, our new hire Taylor Reed starts Monday."',
+      ].join('\n'),
+    );
+  });
+});
