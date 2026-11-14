@@ -64,4 +64,21 @@ describe('shared token', () => {
     await app.close();
     await open.app.close();
   });
+
+  it('stops unlock attempts after ten in a minute, including a later correct token', async () => {
+    const { app } = await makeTestApp({ host: '0.0.0.0', authToken: TOKEN });
+    for (let i = 0; i < 10; i++) {
+      expect(
+        (await app.inject({ method: 'POST', url: '/api/auth', payload: { token: 'wrong-token' } }))
+          .statusCode,
+      ).toBe(401);
+    }
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/api/auth',
+      payload: { token: TOKEN },
+    });
+    expect(blocked.statusCode).toBe(429);
+    await app.close();
+  });
 });

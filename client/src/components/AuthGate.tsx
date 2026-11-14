@@ -33,8 +33,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
     try {
       await api.unlock(token);
       setPhase('open');
-    } catch {
-      setError('That token was not accepted.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      setError(
+        message.startsWith('429')
+          ? 'Too many attempts. Wait a minute and try again.'
+          : 'That token was not accepted.',
+      );
     } finally {
       setPending(false);
     }

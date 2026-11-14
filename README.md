@@ -132,7 +132,7 @@ Open <http://127.0.0.1:4317>.
 
 ### 6. Running on a Raspberry Pi or home server (optional)
 
-The app runs on arm64. To reach it from other devices, set `HOST=0.0.0.0` and `AUTH_TOKEN` to a long random secret, and expose it **only** over a private network such as Tailscale. The server refuses to start if that bind address has no token. On first visit the browser asks for the token and keeps it in an `HttpOnly` cookie; API clients can send `Authorization: Bearer <token>` instead. Don't put the app on the public internet. A reverse proxy such as Caddy (`reverse_proxy localhost:4317`) works well in front of it. Loopback (`127.0.0.1`, `localhost`, `::1`) stays open with no token.
+The app runs on arm64. To reach it from other devices, set `HOST=0.0.0.0` and `AUTH_TOKEN` to a long random secret, and expose it **only** over a private network such as Tailscale. The server refuses to start if that bind address has no token. On first visit the browser asks for the token and keeps it in an `HttpOnly` cookie; API clients can send `Authorization: Bearer <token>` instead. Unlock attempts are limited to 10 per minute per address. Don't put the app on the public internet. A reverse proxy such as Caddy (`reverse_proxy localhost:4317`) works well in front of it. Loopback (`127.0.0.1`, `localhost`, `::1`) stays open with no token.
 
 ## Configuration
 
@@ -326,7 +326,7 @@ All routes are under `/api`. Invalid input returns `400`, an unknown lab returns
 
 - **Sandboxed labs.** The iframe uses `sandbox="allow-same-origin"` and never `allow-scripts`. Raw lab responses carry `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:` and `X-Content-Type-Options: nosniff`.
 - **No external requests.** No CDNs, web fonts, analytics, or third-party APIs. An E2E test fails if any page makes a request to another origin, and another test checks the built assets.
-- **Local by default.** The server binds to `127.0.0.1` with no authentication. Binding any other address requires `AUTH_TOKEN`; `/api` routes then accept that secret as a bearer token or cookie. The built client shell stays readable so the browser can show the unlock form.
+- **Local by default.** The server binds to `127.0.0.1` with no authentication. Binding any other address requires `AUTH_TOKEN`; `/api` routes then accept that secret as a bearer token or cookie. The built client shell stays readable so the browser can show the unlock form. That form accepts 10 attempts per minute.
 - **Safe file handling.** Only files matching the lab filename pattern inside `LABS_DIR` are read (no path traversal). Uploads are validated by magic bytes, renamed to UUIDs, size-limited to 10 MB, and served inline with `nosniff`. Restore validates every slug and id before writing any file.
 - **Sanitized notes.** Journal Markdown is sanitized with DOMPurify before it is rendered.
 

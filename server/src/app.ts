@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { z, ZodError } from 'zod';
 import { authCookie, presentedToken, tokensMatch } from './auth';
@@ -35,6 +36,10 @@ export async function buildApp(
   const app = Fastify({ logger: false });
   const authToken = ctx.config.authToken;
 
+  // Registered before the unlock routes so those handlers are rate-limited.
+  // Other routes stay unlimited; this app is single-user once the token is known.
+  await app.register(rateLimit, { global: false });
+
   app.setErrorHandler((error, _req, reply) => {
     if (error instanceof ZodError) {
       return reply.code(400).send({ error: 'Invalid request', issues: error.issues });
@@ -52,20 +57,28 @@ export async function buildApp(
     });
   }
 
-  app.get('/api/auth', async (req) => {
-    const presented = presentedToken(req.headers.authorization, req.headers.cookie);
-    return {
-      required: Boolean(authToken),
-      authenticated: !authToken || Boolean(presented && tokensMatch(presented, authToken)),
-    };
-  });
+  app.get(
+    '/api/auth',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (req) => {
+      const presented = presentedToken(req.headers.authorization, req.headers.cookie);
+      return {
+        required: Boolean(authToken),
+        authenticated: !authToken || Boolean(presented && tokensMatch(presented, authToken)),
+      };
+    },
+  );
 
-  app.post('/api/auth', async (req, reply) => {
-    if (!authToken) return { ok: true };
-    const body = AuthBody.parse(req.body);
-    if (!tokensMatch(body.token, authToken)) return reply.code(401).send({ error: 'Unauthorized' });
-    return reply.header('set-cookie', authCookie(body.token)).send({ ok: true });
-  });
+  app.post(
+    '/api/auth',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      if (!authToken) return { ok: true };
+      const body = AuthBody.parse(req.body);
+      if (!tokensMatch(body.token, authToken)) return reply.code(401).send({ error: 'Unauthorized' });
+      return reply.header('set-cookie', authCookie(body.token)).send({ ok: true });
+    },
+  );
 
   registerLabRoutes(app, ctx);
   registerProgressRoutes(app, ctx);
