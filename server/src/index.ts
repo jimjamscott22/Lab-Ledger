@@ -31,6 +31,7 @@ const app = await buildApp({ config, db, events, ingest, now: () => new Date() }
 const shutdown = createShutdown({
   stopScheduler,
   closeWatcher: () => watcher.close(),
+  closeStreams: () => events.closeStreams(),
   closeApp: () => app.close(),
   closeDb: () => db.close(),
   exit: (code) => process.exit(code),

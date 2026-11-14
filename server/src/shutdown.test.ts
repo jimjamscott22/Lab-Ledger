@@ -11,6 +11,7 @@ describe('createShutdown', () => {
       closeWatcher: async () => {
         order.push('watcher');
       },
+      closeStreams: () => order.push('streams'),
       closeApp: () =>
         new Promise<void>((resolve) => {
           order.push('app');
@@ -27,12 +28,12 @@ describe('createShutdown', () => {
     const second = shutdown();
     expect(second).toBe(first);
     for (let i = 0; i < 20 && !order.includes('app'); i++) await Promise.resolve();
-    expect(order).toEqual(['scheduler', 'watcher', 'app']);
+    expect(order).toEqual(['scheduler', 'watcher', 'streams', 'app']);
     expect(exit).not.toHaveBeenCalled();
 
     releaseApp();
     await first;
-    expect(order).toEqual(['scheduler', 'watcher', 'app', 'app-done', 'db']);
+    expect(order).toEqual(['scheduler', 'watcher', 'streams', 'app', 'app-done', 'db']);
     expect(exit).toHaveBeenCalledTimes(1);
     expect(exit).toHaveBeenCalledWith(0);
   });
@@ -45,6 +46,7 @@ describe('createShutdown', () => {
       closeWatcher: async () => {
         order.push('watcher');
       },
+      closeStreams: () => order.push('streams'),
       closeApp: async () => {
         order.push('app');
         throw new Error('close failed');
@@ -55,7 +57,7 @@ describe('createShutdown', () => {
     });
 
     await shutdown();
-    expect(order).toEqual(['scheduler', 'watcher', 'app', 'db']);
+    expect(order).toEqual(['scheduler', 'watcher', 'streams', 'app', 'db']);
     expect(exit).toHaveBeenCalledWith(1);
   });
 });

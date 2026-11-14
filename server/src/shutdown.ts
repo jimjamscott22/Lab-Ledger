@@ -1,6 +1,7 @@
 export interface ShutdownDeps {
   stopScheduler: () => void;
   closeWatcher: () => Promise<void>;
+  closeStreams: () => void;
   closeApp: () => Promise<void>;
   closeDb: () => void;
   exit: (code: number) => void;
@@ -31,6 +32,7 @@ async function run(deps: ShutdownDeps): Promise<void> {
   };
   await step(deps.stopScheduler);
   await step(deps.closeWatcher);
+  await step(deps.closeStreams);
   await step(deps.closeApp);
   await step(deps.closeDb);
   deps.exit(failed ? 1 : 0);

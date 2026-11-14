@@ -348,7 +348,7 @@ Conventions: TypeScript strict mode, ESM, Prettier (single quotes, 100 columns),
 ## Testing
 
 ```bash
-npm test                               # 193 unit and integration tests
+npm test                               # 194 unit and integration tests
 npx playwright install --with-deps chromium   # one-time, for E2E
 npm run e2e                            # 55 browser tests
 npm run lint && npm run typecheck
