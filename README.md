@@ -132,7 +132,7 @@ Open <http://127.0.0.1:4317>.
 
 ### 6. Running on a Raspberry Pi or home server (optional)
 
-The app runs on arm64. To reach it from other devices, set `HOST=0.0.0.0` and expose it **only** over a private network such as Tailscale. There is no authentication, so don't put it on the public internet. A reverse proxy such as Caddy (`reverse_proxy localhost:4317`) works well in front of it.
+The app runs on arm64. To reach it from other devices, set `HOST=0.0.0.0` and `AUTH_TOKEN` to a long random secret, and expose it **only** over a private network such as Tailscale. The server refuses to start if that bind address has no token. On first visit the browser asks for the token and keeps it in an `HttpOnly` cookie; API clients can send `Authorization: Bearer <token>` instead. Unlock attempts are limited to 10 per minute per address. Don't put the app on the public internet. A reverse proxy such as Caddy (`reverse_proxy localhost:4317`) works well in front of it. Loopback (`127.0.0.1`, `localhost`, `::1`) stays open with no token.
 
 ## Configuration
 
@@ -143,8 +143,9 @@ All settings are environment variables.
 | `LABS_DIR` | `./labs` | Folder containing the lab HTML files and `lab-log.txt` (read-only at runtime) |
 | `DATA_DIR` | `./data` | Where user data lives: `app.db` (SQLite) and `attachments/` (screenshots) |
 | `PORT` | `4317` | API port. In production this also serves the client |
-| `HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` only behind a private network |
-| `WATCH_STABILITY_MS` | `2000` | How long a file must stay unchanged before the watcher reacts (guards against half-written files) |
+| `HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` only behind a private network, and set `AUTH_TOKEN` when you do |
+| `AUTH_TOKEN` | unset | Shared secret required when `HOST` is not loopback. Ignored for `127.0.0.1`, `localhost`, and `::1` |
+| `WATCH_STABILITY_MS` | `2000` | How long a file must stay unchanged before the watcher reacts (integer milliseconds, 0 through 600000) |
 
 Fixed behavior (not configurable): streaks and "today" use the `America/New_York` time zone, and the client dev server uses port `5173`.
 
@@ -319,12 +320,13 @@ All routes are under `/api`. Invalid input returns `400`, an unknown lab returns
 | `GET /questions/due?topic=` | List questions due today, optionally filtered by topic |
 | `POST /questions/:slug/:index/review` | Rate a question and schedule its next review |
 | `GET /backup` · `GET /backup/markdown` · `POST /restore` | Backup, Markdown notes, restore |
+| `GET /auth` · `POST /auth` | Whether a token is required, and exchanging one for a cookie |
 
 ## Security and privacy
 
 - **Sandboxed labs.** The iframe uses `sandbox="allow-same-origin"` and never `allow-scripts`. Raw lab responses carry `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:` and `X-Content-Type-Options: nosniff`.
 - **No external requests.** No CDNs, web fonts, analytics, or third-party APIs. An E2E test fails if any page makes a request to another origin, and another test checks the built assets.
-- **Local by default.** The server binds to `127.0.0.1`. There is no authentication, so keep it on localhost or a private network.
+- **Local by default.** The server binds to `127.0.0.1` with no authentication. Binding any other address requires `AUTH_TOKEN`; `/api` routes then accept that secret as a bearer token or cookie. The built client shell stays readable so the browser can show the unlock form. That form accepts 10 attempts per minute.
 - **Safe file handling.** Only files matching the lab filename pattern inside `LABS_DIR` are read (no path traversal). Uploads are validated by magic bytes, renamed to UUIDs, size-limited to 10 MB, and served inline with `nosniff`. Restore validates every slug and id before writing any file.
 - **Sanitized notes.** Journal Markdown is sanitized with DOMPurify before it is rendered.
 
@@ -346,9 +348,9 @@ Conventions: TypeScript strict mode, ESM, Prettier (single quotes, 100 columns),
 ## Testing
 
 ```bash
-npm test                               # 163 unit and integration tests
+npm test                               # 194 unit and integration tests
 npx playwright install --with-deps chromium   # one-time, for E2E
-npm run e2e                            # 54 browser tests
+npm run e2e                            # 55 browser tests
 npm run lint && npm run typecheck
 ```
 
@@ -374,7 +376,8 @@ The E2E suite runs against a throwaway copy of the fixtures on port 4318 (`.e2e/
 | Port already in use | Set `PORT` to a free port. In dev, the client expects the API on 4317, so change the proxy target in `client/vite.config.ts` too |
 | A lab shows "parsed partially" | The file is missing a title or checkboxes. It still opens in the viewer, and you can still journal on it |
 | A lab shows "file missing" | It is listed in `lab-log.txt` but the HTML file isn't in `LABS_DIR` |
-| Can't reach the app from another device | By default it listens on `127.0.0.1` only. Set `HOST=0.0.0.0` and use a private network such as Tailscale |
+| Can't reach the app from another device | By default it listens on `127.0.0.1` only. Set `HOST=0.0.0.0` and `AUTH_TOKEN`, and use a private network such as Tailscale |
+| The process exits mentioning `PORT` or `AUTH_TOKEN` | `PORT` has to be an integer from 1 to 65535. A non-loopback `HOST` also needs a non-empty `AUTH_TOKEN` |
 | E2E tests can't launch a browser | Run `npx playwright install --with-deps chromium` |
 
 ## Roadmap
