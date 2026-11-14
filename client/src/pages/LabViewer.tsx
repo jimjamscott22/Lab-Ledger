@@ -17,6 +17,18 @@ const LABELS: Record<LabStatus, string> = {
   skipped: 'Skipped',
 };
 
+const NOTE_TABS = ['steps', 'journal', 'ticket'] as const;
+type NoteTab = (typeof NOTE_TABS)[number];
+
+function nextNoteTab(current: NoteTab, key: string): NoteTab | null {
+  const index = NOTE_TABS.indexOf(current);
+  if (key === 'Home') return NOTE_TABS[0];
+  if (key === 'End') return NOTE_TABS[NOTE_TABS.length - 1];
+  if (key === 'ArrowRight') return NOTE_TABS[(index + 1) % NOTE_TABS.length];
+  if (key === 'ArrowLeft') return NOTE_TABS[(index - 1 + NOTE_TABS.length) % NOTE_TABS.length];
+  return null;
+}
+
 export default function LabViewer() {
   const { slug = '' } = useParams();
   const nav = useNavigate();
@@ -35,9 +47,13 @@ export default function LabViewer() {
       return next;
     });
   const requestedTab = searchParams.get('tab');
-  const [tab, setTab] = useState<'steps' | 'journal' | 'ticket'>(
+  const [tab, setTab] = useState<NoteTab>(
     requestedTab === 'journal' || requestedTab === 'ticket' ? requestedTab : 'steps',
   );
+  const selectNoteTab = (next: NoteTab) => {
+    setTab(next);
+    document.getElementById(`tab-${next}`)?.focus();
+  };
   const [allChecked, setAllChecked] = useState(false);
   const [saveError, setSaveError] = useState('');
   const journalRef = useRef<HTMLTextAreaElement>(null);
@@ -87,7 +103,9 @@ export default function LabViewer() {
         setChecked(new Set(confirmedChecked.current));
         setStatus(confirmedStatus.current);
         setAllChecked(
-          total > 0 && confirmedChecked.current.size === total && confirmedStatus.current !== 'completed',
+          total > 0 &&
+            confirmedChecked.current.size === total &&
+            confirmedStatus.current !== 'completed',
         );
         setSaveError('Could not save that step change. It has been undone.');
       }
@@ -295,63 +313,63 @@ export default function LabViewer() {
           </div>
         </section>
         <section className="panel" aria-label="Lab notes and steps">
-          <div className="tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              id="tab-steps"
-              aria-selected={tab === 'steps'}
-              aria-controls="panel-steps"
-              onClick={() => setTab('steps')}
-            >
-              Steps
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id="tab-journal"
-              aria-selected={tab === 'journal'}
-              aria-controls="panel-journal"
-              onClick={() => setTab('journal')}
-            >
-              Journal
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id="tab-ticket"
-              aria-selected={tab === 'ticket'}
-              aria-controls="panel-ticket"
-              onClick={() => setTab('ticket')}
-            >
-              Ticket
-            </button>
+          <div
+            className="tabs"
+            role="tablist"
+            aria-label="Lab notes"
+            onKeyDown={(event) => {
+              const next = nextNoteTab(tab, event.key);
+              if (!next) return;
+              event.preventDefault();
+              selectNoteTab(next);
+            }}
+          >
+            {NOTE_TABS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`tab-${id}`}
+                aria-selected={tab === id}
+                aria-controls={`panel-${id}`}
+                tabIndex={tab === id ? 0 : -1}
+                onClick={() => setTab(id)}
+              >
+                {id === 'steps' ? 'Steps' : id === 'journal' ? 'Journal' : 'Ticket'}
+              </button>
+            ))}
           </div>
           <div
             className="panel-body"
             role="tabpanel"
-            id={`panel-${tab}`}
-            aria-labelledby={`tab-${tab}`}
+            id="panel-steps"
+            aria-labelledby="tab-steps"
+            hidden={tab !== 'steps'}
           >
-            <div hidden={tab !== 'steps'}>
-              <StepList
-                steps={lab.steps}
-                checked={checked}
-                focusIndex={focusStep}
-                onToggle={(i, v) => void toggle(i, v)}
-              />
-            </div>
-            <div hidden={tab !== 'journal'}>
-              <JournalEditor
-                key={slug}
-                slug={slug}
-                initial={data.journal}
-                textareaRef={journalRef}
-              />
-            </div>
-            <div hidden={tab !== 'ticket'}>
-              <TicketEditor key={slug} slug={slug} />
-            </div>
+            <StepList
+              steps={lab.steps}
+              checked={checked}
+              focusIndex={focusStep}
+              onToggle={(i, v) => void toggle(i, v)}
+            />
+          </div>
+          <div
+            className="panel-body"
+            role="tabpanel"
+            id="panel-journal"
+            aria-labelledby="tab-journal"
+            hidden={tab !== 'journal'}
+          >
+            <JournalEditor key={slug} slug={slug} initial={data.journal} textareaRef={journalRef} />
+          </div>
+          <div
+            className="panel-body"
+            role="tabpanel"
+            id="panel-ticket"
+            aria-labelledby="tab-ticket"
+            hidden={tab !== 'ticket'}
+          >
+            <TicketEditor key={slug} slug={slug} />
           </div>
         </section>
       </div>

@@ -22,6 +22,28 @@ test('step progress persists across reload and syncs with the iframe', async ({ 
   await expect(page.getByLabel('Status')).toHaveValue('in_progress');
 });
 
+test('notes tabs follow the keyboard and keep their panels mounted', async ({ page }) => {
+  await page.goto('/labs/ad-user-onboarding');
+  const steps = page.getByRole('tab', { name: 'Steps', exact: true });
+  await steps.focus();
+  await page.keyboard.press('ArrowRight');
+  const journal = page.getByRole('tab', { name: 'Journal', exact: true });
+  await expect(journal).toBeFocused();
+  await expect(journal).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/\/labs\/ad-user-onboarding$/);
+  await page.getByLabel('Journal (Markdown)').fill('kept while switching tabs');
+  await journal.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Ticket', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(journal).toBeFocused();
+  await expect(page.getByLabel('Journal (Markdown)')).toHaveValue('kept while switching tabs');
+  await page.keyboard.press('Home');
+  await expect(steps).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(page.getByRole('tab', { name: 'Ticket', exact: true })).toBeFocused();
+});
+
 test('arrow keys navigate and the ends disable their buttons', async ({ page }) => {
   await page.goto('/labs/ad-user-onboarding');
   await expect(page.getByRole('button', { name: 'Previous lab' })).toBeDisabled();
@@ -119,6 +141,7 @@ test('a pending ticket edit is saved when the page reloads or leaves immediately
 test('completing every step offers to mark the lab completed', async ({ page }) => {
   await page.goto('/labs/ad-user-onboarding');
   const boxes = page.locator('ol[aria-label="Steps"] input[type="checkbox"]');
+  await expect(boxes).toHaveCount(9);
   const n = await boxes.count();
   for (let i = 0; i < n; i++) await boxes.nth(i).check();
   await page.getByRole('button', { name: 'Mark completed' }).click();
