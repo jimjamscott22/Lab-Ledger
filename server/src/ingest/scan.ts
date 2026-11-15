@@ -21,48 +21,68 @@ export function scanLabs(db: Db, labsDir: string, now: () => Date = () => new Da
   const result: ScanResult = { added: [], updated: [], removed: [], warnings: [] };
   const names = fs.existsSync(labsDir) ? fs.readdirSync(labsDir) : [];
 
-  const bySlug = new Map<string, { name: string; mtime: number }>();
+  const bySlug = new Map<string, { name: string; mtime: number; size: number }>();
   for (const name of names) {
     const m = LAB_FILE_RE.exec(name);
     if (!m) continue;
-    const mtime = fs.statSync(path.join(labsDir, name)).mtimeMs;
+    const stat = fs.statSync(path.join(labsDir, name));
     const prev = bySlug.get(m[2]);
     if (prev) {
       result.warnings.push(`Duplicate slug ${m[2]}: keeping the newest file`);
-      if (prev.mtime >= mtime) continue;
+      if (prev.mtime >= stat.mtimeMs) continue;
     }
-    bySlug.set(m[2], { name, mtime });
+    bySlug.set(m[2], { name, mtime: stat.mtimeMs, size: stat.size });
   }
 
   const logPath = path.join(labsDir, 'lab-log.txt');
   const log = fs.existsSync(logPath) ? parseLabLog(fs.readFileSync(logPath, 'utf8')) : new Map();
 
   const tx = db.transaction(() => {
-    for (const [slug, { name }] of bySlug) {
-      let buf: Buffer;
-      try {
-        buf = fs.readFileSync(path.join(labsDir, name));
-      } catch (err) {
-        result.warnings.push(`Could not read ${name}: ${(err as Error).message}`);
-        continue;
-      }
-      // The parser version is part of the hash so a parser fix re-parses unchanged files.
-      const fileHash = sha256(Buffer.concat([Buffer.from(`parser:${PARSER_VERSION}\n`), buf]));
-      const prev = repo.getLab(db, slug);
+    for (const [slug, file] of bySlug) {
+      const stored = repo.getStoredLab(db, slug);
+      const prev = stored?.lab ?? null;
       const before = prev ? JSON.stringify(prev) : null;
+      const mtimeKey = String(file.mtime);
+      // Skip the disk read when size, mtime, and parser version still match.
+      // A parser bump clears the match so unchanged files are hashed again.
+      const sourceMatches =
+        !!stored &&
+        !!prev &&
+        !prev.missingFile &&
+        prev.fileName === file.name &&
+        stored.sourceMtimeMs === mtimeKey &&
+        stored.sourceSize === file.size &&
+        stored.parserVersion === PARSER_VERSION;
 
       let lab: Lab;
-      if (prev && prev.fileHash === fileHash && prev.fileName === name && !prev.missingFile) {
+      if (sourceMatches && prev) {
         lab = { ...prev };
       } else {
-        lab = {
-          ...parseLabHtml(buf.toString('utf8'), name),
-          topicLabel: null,
-          topics: [],
-          fileHash,
-          ingestedAt: now().toISOString(),
-          missingFile: false,
-        };
+        let buf: Buffer;
+        try {
+          buf = fs.readFileSync(path.join(labsDir, file.name));
+        } catch (err) {
+          result.warnings.push(`Could not read ${file.name}: ${(err as Error).message}`);
+          continue;
+        }
+        const fileHash = sha256(Buffer.concat([Buffer.from(`parser:${PARSER_VERSION}\n`), buf]));
+        if (
+          prev &&
+          prev.fileHash === fileHash &&
+          prev.fileName === file.name &&
+          !prev.missingFile
+        ) {
+          lab = { ...prev };
+        } else {
+          lab = {
+            ...parseLabHtml(buf.toString('utf8'), file.name),
+            topicLabel: null,
+            topics: [],
+            fileHash,
+            ingestedAt: now().toISOString(),
+            missingFile: false,
+          };
+        }
       }
 
       const entry = log.get(slug);
@@ -71,12 +91,23 @@ export function scanLabs(db: Db, labsDir: string, now: () => Date = () => new Da
       lab.topics = classifyTopics({ topicLabel: lab.topicLabel, tags: lab.tags, title: lab.title });
       lab.missingFile = false;
 
-      if (before === JSON.stringify(lab)) continue;
+      const source = {
+        sourceMtimeMs: mtimeKey,
+        sourceSize: file.size,
+        parserVersion: PARSER_VERSION,
+      };
+      const metaChanged =
+        !stored ||
+        stored.sourceMtimeMs !== source.sourceMtimeMs ||
+        stored.sourceSize !== source.sourceSize ||
+        stored.parserVersion !== source.parserVersion;
+      const contentChanged = before !== JSON.stringify(lab);
+      if (!contentChanged && !metaChanged) continue;
 
-      repo.upsertLab(db, lab);
+      repo.upsertLab(db, lab, source);
       if (!prev) {
         result.added.push(slug);
-      } else {
+      } else if (contentChanged) {
         result.updated.push(slug);
         const rows = repo.getProgressRows(db, slug);
         if (rows.length) repo.replaceProgress(db, slug, remapProgress(rows, lab.steps));
@@ -84,7 +115,7 @@ export function scanLabs(db: Db, labsDir: string, now: () => Date = () => new Da
       }
     }
 
-    for (const lab of repo.listLabs(db)) {
+    for (const lab of repo.listLabFlags(db)) {
       if (!bySlug.has(lab.slug) && !lab.missingFile) {
         repo.markMissing(db, lab.slug);
         result.removed.push(lab.slug);

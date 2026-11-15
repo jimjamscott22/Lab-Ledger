@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { openDb } from '../db/open';
 import * as repo from '../db/repo';
+import { PARSER_VERSION } from './parse';
 import { scanLabs } from './scan';
 import { createIngestService } from './service';
 import { LabEvents } from '../events';
@@ -12,7 +13,8 @@ import type { LabEventPayload } from '@lab-ledger/shared';
 
 const hashDir = (dir: string) => {
   const h = createHash('sha256');
-  for (const f of fs.readdirSync(dir).sort()) h.update(f).update(fs.readFileSync(path.join(dir, f)));
+  for (const f of fs.readdirSync(dir).sort())
+    h.update(f).update(fs.readFileSync(path.join(dir, f)));
   return h.digest('hex');
 };
 
@@ -53,7 +55,10 @@ describe('scanLabs', () => {
     const dir = copyFixtures();
     const db = openDb(':memory:');
     scanLabs(db, dir);
-    fs.writeFileSync(path.join(dir, '2026-10-30-new-one.html'), '<html><head><title>Lab 08: New One</title></head><body><h1>New One</h1><label><input type="checkbox"> a</label></body></html>');
+    fs.writeFileSync(
+      path.join(dir, '2026-10-30-new-one.html'),
+      '<html><head><title>Lab 08: New One</title></head><body><h1>New One</h1><label><input type="checkbox"> a</label></body></html>',
+    );
     fs.appendFileSync(path.join(dir, '2026-10-23-ad-user-onboarding.html'), '\n<!-- edit -->');
     fs.rmSync(path.join(dir, '2026-10-24-gpo-drive-mapping.html'));
     const r = scanLabs(db, dir);
@@ -65,7 +70,10 @@ describe('scanLabs', () => {
 
   it('creates a placeholder for a log line without a file', () => {
     const dir = copyFixtures();
-    fs.appendFileSync(path.join(dir, 'lab-log.txt'), '2026-10-30 | Lab 08 | DNS basics | dns-basics\n');
+    fs.appendFileSync(
+      path.join(dir, 'lab-log.txt'),
+      '2026-10-30 | Lab 08 | DNS basics | dns-basics\n',
+    );
     const db = openDb(':memory:');
     scanLabs(db, dir);
     const lab = repo.getLab(db, 'dns-basics');
@@ -74,7 +82,10 @@ describe('scanLabs', () => {
 
   it('ingests a file with no log line using the number from the title', () => {
     const dir = copyFixtures();
-    fs.writeFileSync(path.join(dir, '2026-10-30-no-log.html'), '<html><head><title>Lab 09: No Log</title></head><body><h1>No Log</h1><label><input type="checkbox"> a</label></body></html>');
+    fs.writeFileSync(
+      path.join(dir, '2026-10-30-no-log.html'),
+      '<html><head><title>Lab 09: No Log</title></head><body><h1>No Log</h1><label><input type="checkbox"> a</label></body></html>',
+    );
     const db = openDb(':memory:');
     scanLabs(db, dir);
     expect(repo.getLab(db, 'no-log')).toMatchObject({ labNumber: 9, topicLabel: null });
@@ -132,6 +143,63 @@ describe('scanLabs', () => {
       .prepare('SELECT q_index, box, due_date FROM question_reviews WHERE slug=? ORDER BY q_index')
       .all('ad-user-onboarding');
     expect(rows).toEqual([{ q_index: 1, box: 3, due_date: '2026-11-02' }]);
+  });
+
+  it('does not read lab HTML again when size and mtime are unchanged', () => {
+    const dir = copyFixtures();
+    const db = openDb(':memory:');
+    scanLabs(db, dir);
+    const spy = vi.spyOn(fs, 'readFileSync');
+    const r = scanLabs(db, dir);
+    const htmlReads = spy.mock.calls.filter((c) => String(c[0]).endsWith('.html'));
+    expect(htmlReads).toHaveLength(0);
+    expect(r).toEqual({ added: [], updated: [], removed: [], warnings: [] });
+    spy.mockRestore();
+  });
+
+  it('ignores byte changes when the stored size and mtime still match', () => {
+    const dir = copyFixtures();
+    const db = openDb(':memory:');
+    scanLabs(db, dir);
+    const file = path.join(dir, '2026-10-23-ad-user-onboarding.html');
+    const html = fs.readFileSync(file, 'utf8');
+    fs.writeFileSync(file, html.replaceAll('Onboarding', 'Onboardinx'));
+    const after = fs.statSync(file);
+    db.prepare('UPDATE labs SET source_mtime_ms=?, source_size=? WHERE slug=?').run(
+      String(after.mtimeMs),
+      after.size,
+      'ad-user-onboarding',
+    );
+    scanLabs(db, dir);
+    expect(repo.getLab(db, 'ad-user-onboarding')?.title).toBe('AD User Onboarding');
+  });
+
+  it('re-reads a lab when the file size changes', () => {
+    const dir = copyFixtures();
+    const db = openDb(':memory:');
+    scanLabs(db, dir);
+    const file = path.join(dir, '2026-10-23-ad-user-onboarding.html');
+    fs.appendFileSync(file, '\n');
+    const after = fs.statSync(file);
+    db.prepare('UPDATE labs SET source_mtime_ms=? WHERE slug=?').run(
+      String(after.mtimeMs),
+      'ad-user-onboarding',
+    );
+    const r = scanLabs(db, dir);
+    expect(r.updated).toContain('ad-user-onboarding');
+  });
+
+  it('re-reads labs when the stored parser version is stale without marking them updated', () => {
+    const dir = copyFixtures();
+    const db = openDb(':memory:');
+    scanLabs(db, dir);
+    db.prepare('UPDATE labs SET parser_version=0').run();
+    const spy = vi.spyOn(fs, 'readFileSync');
+    const r = scanLabs(db, dir);
+    expect(spy.mock.calls.some((c) => String(c[0]).endsWith('.html'))).toBe(true);
+    expect(r.updated).toEqual([]);
+    expect(repo.getStoredLab(db, 'ad-user-onboarding')?.parserVersion).toBe(PARSER_VERSION);
+    spy.mockRestore();
   });
 
   it('never modifies the source files', () => {

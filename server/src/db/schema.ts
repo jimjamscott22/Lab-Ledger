@@ -61,3 +61,11 @@ CREATE TABLE IF NOT EXISTS restore_state (
   phase TEXT NOT NULL
 );
 `;
+
+export const SCHEMA_V6 = `
+ALTER TABLE labs ADD COLUMN steps_total INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE labs ADD COLUMN source_mtime_ms TEXT;
+ALTER TABLE labs ADD COLUMN source_size INTEGER;
+ALTER TABLE labs ADD COLUMN parser_version INTEGER;
+UPDATE labs SET steps_total = COALESCE(json_array_length(json_extract(parsed_json, '$.steps')), 0);
+`;

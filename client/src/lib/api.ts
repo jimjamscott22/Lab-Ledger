@@ -13,7 +13,10 @@ import type {
   SearchResult,
 } from '@lab-ledger/shared';
 
-async function request<T>(path: string, init: { method?: string; json?: unknown; form?: FormData } = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  init: { method?: string; json?: unknown; form?: FormData } = {},
+): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method: init.method ?? 'GET',
     headers: init.json !== undefined ? { 'Content-Type': 'application/json' } : undefined,
@@ -24,14 +27,26 @@ async function request<T>(path: string, init: { method?: string; json?: unknown;
 }
 
 export const api = {
-  labs: (params?: URLSearchParams) => request<LabSummary[]>(`/labs${params?.size ? `?${params}` : ''}`),
+  authStatus: () => request<{ required: boolean; authenticated: boolean }>('/auth'),
+  unlock: (token: string) => request<{ ok: boolean }>('/auth', { method: 'POST', json: { token } }),
+  labs: (params?: URLSearchParams) =>
+    request<LabSummary[]>(`/labs${params?.size ? `?${params}` : ''}`),
   lab: (slug: string) => request<LabDetail>(`/labs/${slug}`),
   stats: () => request<Stats>('/stats'),
-  rescan: () => request<{ added: string[]; updated: string[]; removed: string[]; warnings: string[] }>('/labs/rescan', { method: 'POST' }),
-  setStatus: (slug: string, status: LabStatus) => request<LabState>(`/labs/${slug}/status`, { method: 'PUT', json: { status } }),
+  rescan: () =>
+    request<{ added: string[]; updated: string[]; removed: string[]; warnings: string[] }>(
+      '/labs/rescan',
+      { method: 'POST' },
+    ),
+  setStatus: (slug: string, status: LabStatus) =>
+    request<LabState>(`/labs/${slug}/status`, { method: 'PUT', json: { status } }),
   toggleStep: (slug: string, index: number, checked: boolean) =>
-    request<{ checked: number[]; status: LabStatus; allChecked: boolean }>(`/labs/${slug}/steps`, { method: 'PUT', json: { index, checked } }),
-  saveJournal: (slug: string, j: Omit<Journal, 'updatedAt'>) => request<Journal>(`/labs/${slug}/journal`, { method: 'PUT', json: j }),
+    request<{ checked: number[]; status: LabStatus; allChecked: boolean }>(`/labs/${slug}/steps`, {
+      method: 'PUT',
+      json: { index, checked },
+    }),
+  saveJournal: (slug: string, j: Omit<Journal, 'updatedAt'>) =>
+    request<Journal>(`/labs/${slug}/journal`, { method: 'PUT', json: j }),
   saveJournalOnLeave: (slug: string, j: Omit<Journal, 'updatedAt'>): void => {
     try {
       void fetch(`/api/labs/${slug}/journal`, {
@@ -70,7 +85,11 @@ export const api = {
   uploadAttachment: (slug: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
-    return request<{ id: string; url: string }>(`/labs/${slug}/attachments`, { method: 'POST', form });
+    return request<{ id: string; url: string }>(`/labs/${slug}/attachments`, {
+      method: 'POST',
+      form,
+    });
   },
-  restore: (payload: unknown) => request<{ ok: boolean }>('/restore', { method: 'POST', json: payload }),
+  restore: (payload: unknown) =>
+    request<{ ok: boolean }>('/restore', { method: 'POST', json: payload }),
 };

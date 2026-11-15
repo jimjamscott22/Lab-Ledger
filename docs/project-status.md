@@ -67,10 +67,12 @@ This document records the repository state at the current pause point. The READM
 
 ## Persistence and migrations
 
-- SQLite schema version: 4.
+- SQLite schema version: 6.
 - Version 2 adds `tickets`.
 - Version 3 adds `question_reviews`.
 - Version 4 adds the `search_idx` FTS5 table and indexes existing data.
+- Version 5 adds `restore_state` for crash-safe restores.
+- Version 6 adds `steps_total` (backfilled from parsed steps) plus the source mtime, size, and parser version used to skip unchanged lab reads.
 - Existing version-1 backups remain accepted; missing Phase 2 collections default to empty arrays.
 - Runtime user data remains under `DATA_DIR` and is not committed.
 

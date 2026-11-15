@@ -8,10 +8,18 @@ import { LabEvents } from './events';
 import { createIngestService } from './ingest/service';
 import { copyFixtures } from './testing';
 
-export async function makeTestApp(opts: { malformed?: boolean; now?: Date } = {}) {
+export async function makeTestApp(
+  opts: { malformed?: boolean; now?: Date; host?: string; authToken?: string | null } = {},
+) {
   const labsDir = copyFixtures({ malformed: opts.malformed });
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'data-'));
-  const config = { ...loadConfig({}), labsDir, dataDir };
+  const config = {
+    ...loadConfig({}),
+    labsDir,
+    dataDir,
+    ...(opts.host ? { host: opts.host } : {}),
+    ...(opts.authToken !== undefined ? { authToken: opts.authToken } : {}),
+  };
   const db = openDb(':memory:');
   const events = new LabEvents();
   const ingest = createIngestService({ db, labsDir, events });
@@ -19,5 +27,13 @@ export async function makeTestApp(opts: { malformed?: boolean; now?: Date } = {}
   let current = opts.now ?? new Date('2026-10-29T15:00:00Z');
   const ctx: AppContext = { config, db, events, ingest, now: () => current };
   const app = await buildApp(ctx, { clientDir: null });
-  return { app, ctx, labsDir, dataDir, setNow: (d: Date) => { current = d; } };
+  return {
+    app,
+    ctx,
+    labsDir,
+    dataDir,
+    setNow: (d: Date) => {
+      current = d;
+    },
+  };
 }

@@ -21,7 +21,15 @@ const detail: LabDetail = {
     timeEstimateMin: null,
     scenarioText: null,
     prerequisites: [],
-    steps: [{ index: 0, key: 'ad-user-onboarding#0', textHash: 'abc', text: 'Create the user', section: 'Steps' }],
+    steps: [
+      {
+        index: 0,
+        key: 'ad-user-onboarding#0',
+        textHash: 'abc',
+        text: 'Create the user',
+        section: 'Steps',
+      },
+    ],
     questions: [],
     sections: [],
     fileName: '2026-10-23-ad-user-onboarding.html',
@@ -92,7 +100,9 @@ describe('LabViewer optimistic mutations', () => {
     });
 
     expect(checkbox!.checked).toBe(false);
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Could not save that step change');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Could not save that step change',
+    );
 
     act(() => root.unmount());
   });
@@ -138,7 +148,11 @@ describe('LabViewer optimistic mutations', () => {
     vi.spyOn(api, 'setStatus').mockImplementation(
       () => new Promise((_, reject) => rejecters.push(reject)),
     );
-    vi.spyOn(api, 'toggleStep').mockResolvedValue({ checked: [], status: 'not_started', allChecked: false });
+    vi.spyOn(api, 'toggleStep').mockResolvedValue({
+      checked: [],
+      status: 'not_started',
+      allChecked: false,
+    });
     const root = await render();
 
     const select = container.querySelector<HTMLSelectElement>('select[aria-label="Status"]');
@@ -171,8 +185,38 @@ describe('LabViewer optimistic mutations', () => {
     act(() => root.unmount());
   });
 
+  it('keeps a real panel for every notes tab and moves with the arrow keys', async () => {
+    const root = await render();
+    for (const id of ['steps', 'journal', 'ticket']) {
+      const tab = container.querySelector(`#tab-${id}`);
+      const panelId = tab?.getAttribute('aria-controls');
+      expect(panelId).toBe(`panel-${id}`);
+      expect(container.querySelector(`#${panelId}`)).not.toBeNull();
+    }
+
+    const steps = container.querySelector<HTMLButtonElement>('#tab-steps');
+    expect(steps?.tabIndex).toBe(0);
+    expect(container.querySelector<HTMLButtonElement>('#tab-journal')?.tabIndex).toBe(-1);
+    steps?.focus();
+    await act(async () => {
+      steps?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    const journal = container.querySelector<HTMLButtonElement>('#tab-journal');
+    expect(journal?.getAttribute('aria-selected')).toBe('true');
+    expect(journal?.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(journal);
+    expect(container.querySelector('#panel-steps')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('#panel-journal')?.hasAttribute('hidden')).toBe(false);
+
+    act(() => root.unmount());
+  });
+
   it('keeps the step checked when the toggle request succeeds', async () => {
-    vi.spyOn(api, 'toggleStep').mockResolvedValue({ checked: [0], status: 'in_progress', allChecked: true });
+    vi.spyOn(api, 'toggleStep').mockResolvedValue({
+      checked: [0],
+      status: 'in_progress',
+      allChecked: true,
+    });
     const root = await render();
 
     const checkbox = container.querySelector<HTMLInputElement>('.steps input[type="checkbox"]');

@@ -61,13 +61,29 @@ export function registerLabRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.get('/api/events', (req, reply) => {
     reply.hijack();
     const res = reply.raw;
-    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-    res.write(': connected\n\n');
-    const off = ctx.events.subscribe((e) => res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`));
-    const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
-    req.raw.on('close', () => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    let open = true;
+    const write = (chunk: string) => {
+      if (open) res.write(chunk);
+    };
+    write(': connected\n\n');
+    const off = ctx.events.subscribe((e) => {
+      write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
+    });
+    const ping = setInterval(() => write(': ping\n\n'), 25_000);
+    const untrack = ctx.events.track(res);
+    const finish = () => {
+      if (!open) return;
+      open = false;
       clearInterval(ping);
       off();
-    });
+      untrack();
+    };
+    req.raw.on('close', finish);
+    res.on('close', finish);
   });
 }
