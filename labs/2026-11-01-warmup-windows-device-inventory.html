@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lab 10: Warm-up - Windows Device and Network Inventory</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:860px;margin:0 auto;padding:1.2rem;line-height:1.6;color:#1f2937;background:#f8fafc}
+h1,h2{color:#0f3d75}h2{border-bottom:2px solid #cbd5e1;padding-bottom:.2rem;margin-top:2rem}
+.tag{display:inline-block;background:#e0ecff;color:#0f3d75;border-radius:999px;padding:.1rem .7rem;font-size:.85rem;margin-right:.3rem}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin:1rem 0}.warn{border-left:5px solid #dc2626;background:#fef2f2}
+pre{background:#0d1117;color:#e6edf3;padding:1rem;border-radius:8px;overflow-x:auto}code{font-family:Consolas,Menlo,monospace}
+</style></head><body>
+<h1>Lab 10: Warm-up - Windows Device and Network Inventory</h1>
+<p><span class="tag">Warm-up</span><span class="tag">Windows</span><span class="tag">Networking</span><span class="tag">PowerShell</span><span class="tag">⏱ 10–15 min</span></p>
+<div class="card warn"><strong>Safe practice:</strong> Use a Windows lab VM or your own device. The commands below only read local settings; do not reset adapters, change IP settings, or run these checks on a device you are not authorized to inspect.</div>
+
+<h2>Skill &amp; Scenario</h2>
+<p>A user says their laptop cannot reach a work resource. Practice collecting basic device and network facts first, before attempting a fix or escalating.</p>
+
+<h2>Time Estimate</h2><p>10–15 minutes.</p>
+
+<h2>Prerequisites</h2>
+<ul><li>Windows 10 or 11.</li><li>Windows PowerShell or PowerShell 7; administrator rights are not required.</li></ul>
+
+<h2>Steps</h2>
+<div class="card step"><label><input type="checkbox">1. Record the computer name and Windows version.</label>
+<pre><code>$os = Get-CimInstance Win32_OperatingSystem
+$computer = Get-CimInstance Win32_ComputerSystem
+$os | Select-Object CSName, Caption, Version, BuildNumber
+$computer | Select-Object Manufacturer, Model</code></pre>
+<p>Expect the device name, operating-system version, manufacturer, and model.</p></div>
+<div class="card step"><label><input type="checkbox">2. Review network adapters and their status.</label>
+<pre><code>Get-NetAdapter |
+  Select-Object Name, InterfaceDescription, Status, LinkSpeed</code></pre>
+<p>Expect one row per adapter. A disconnected adapter may show <code>Disconnected</code>; that is evidence, not a reason to change settings.</p></div>
+<div class="card step"><label><input type="checkbox">3. Find the active interface's address and gateway.</label>
+<pre><code>Get-NetIPConfiguration |
+  Select-Object InterfaceAlias, IPv4Address, IPv4DefaultGateway, DNSServer</code></pre>
+<p>Compare the interface alias with the adapter status. An address or gateway may be absent when that interface is disconnected.</p></div>
+<div class="card step"><label><input type="checkbox">4. Cross-check with the familiar Windows command.</label>
+<pre><code>ipconfig /all</code></pre>
+<p>Find the same adapter name, IPv4 address, default gateway, and DNS servers in the detailed output.</p></div>
+
+<h2>Verify it worked</h2>
+<ul><li>You recorded a device name and Windows build.</li><li>You can identify the active adapter and its connection status.</li><li>You can find the IPv4 address, default gateway, and DNS entries, or note which are missing.</li></ul>
+
+<h2>Cleanup / rollback</h2>
+<p>No cleanup is needed: these commands only display configuration and do not modify network settings.</p>
+
+<h2>Why this matters on the job</h2>
+<p>Capturing the device identity and current network configuration gives the next technician actionable evidence and helps avoid risky changes based on guesses.</p>
+
+<h2>Prepares you for</h2>
+<ul><li>Lab 03: Enroll a Windows VM in Intune and Fix a Noncompliant Device — identifying the device and checking its enrollment context.</li><li>Lab 05: Build a Help Desk PC Info Tool in PowerShell — collecting computer and network properties.</li><li>Lab 07: PC Won't Wake From Sleep After a Hardware Upgrade — recording a baseline before troubleshooting.</li></ul>
+
+<h2>Interview questions</h2>
+<details><summary>Why record network settings before changing them?</summary><p>A baseline helps isolate the cause, supports rollback, and gives other technicians useful evidence.</p></details>
+<details><summary>What might it mean if an interface has no IPv4 gateway?</summary><p>The adapter may be disconnected, or the network may not have supplied a gateway; check connection context before changing settings.</p></details>
+</body></html>

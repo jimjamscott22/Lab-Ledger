@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lab 11: Warm-up - Read Windows Event Logs</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:860px;margin:0 auto;padding:1.2rem;line-height:1.6;color:#1f2937;background:#f8fafc}
+h1,h2{color:#0f3d75}h2{border-bottom:2px solid #cbd5e1;padding-bottom:.2rem;margin-top:2rem}
+.tag{display:inline-block;background:#e0ecff;color:#0f3d75;border-radius:999px;padding:.1rem .7rem;font-size:.85rem;margin-right:.3rem}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin:1rem 0}.warn{border-left:5px solid #dc2626;background:#fef2f2}
+pre{background:#0d1117;color:#e6edf3;padding:1rem;border-radius:8px;overflow-x:auto}code{font-family:Consolas,Menlo,monospace}
+</style></head><body>
+<h1>Lab 11: Warm-up - Read Windows Event Logs</h1>
+<p><span class="tag">Warm-up</span><span class="tag">Windows</span><span class="tag">Troubleshooting</span><span class="tag">⏱ 10–15 min</span></p>
+<div class="card warn"><strong>Safe practice:</strong> Use a Windows lab VM or your own device. These steps read logs only. Do not clear logs or change audit settings; preserve evidence on any device you support.</div>
+
+<h2>Skill &amp; Scenario</h2>
+<p>A user reports an unexpected restart. Practice finding recent events, filtering to errors, and recording the event ID and time without assuming that one event alone proves the cause.</p>
+
+<h2>Time Estimate</h2><p>10–15 minutes.</p>
+
+<h2>Prerequisites</h2>
+<ul><li>Windows 10 or 11.</li><li>Windows PowerShell or PowerShell 7; administrator rights are not required for the System log on a typical personal/lab device.</li></ul>
+
+<h2>Steps</h2>
+<div class="card step"><label><input type="checkbox">1. Check that the System log is available and note its newest event.</label>
+<pre><code>Get-WinEvent -ListLog System |
+  Select-Object LogName, RecordCount, IsEnabled
+Get-WinEvent -LogName System -MaxEvents 1 |
+  Select-Object TimeCreated, Id, LevelDisplayName, ProviderName</code></pre>
+<p>Expect the System log status and, if events exist, one recent event with a timestamp and ID.</p></div>
+<div class="card step"><label><input type="checkbox">2. Read a few recent events and identify their key fields.</label>
+<pre><code>Get-WinEvent -LogName System -MaxEvents 5 |
+  Select-Object TimeCreated, Id, LevelDisplayName, ProviderName</code></pre>
+<p>Look at when events occurred, their IDs, severity, and provider. Informational events are common.</p></div>
+<div class="card step"><label><input type="checkbox">3. Filter to recent errors and critical events.</label>
+<pre><code>$since = (Get-Date).AddDays(-7)
+Get-WinEvent -FilterHashtable @{
+  LogName = 'System'
+  Level = 1, 2
+  StartTime = $since
+} -MaxEvents 10 |
+  Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message</code></pre>
+<p>Expect up to ten matching events. No results is a valid outcome; widen the time window only if the exercise requires more examples.</p></div>
+<div class="card step"><label><input type="checkbox">4. Open Event Viewer and locate the same log.</label>
+<pre><code>eventvwr.msc</code></pre>
+<p>In Windows Logs, select System and compare the time and event ID with PowerShell output. Close Event Viewer when finished.</p></div>
+
+<h2>Verify it worked</h2>
+<ul><li>You found the System log and know how to view its newest entries.</li><li>You can explain the event time, ID, level, and provider.</li><li>You filtered errors without clearing or editing the log.</li></ul>
+
+<h2>Cleanup / rollback</h2>
+<p>No cleanup is needed: the commands and Event Viewer inspection are read-only.</p>
+
+<h2>Why this matters on the job</h2>
+<p>Logs provide a timeline that can confirm or challenge a user's recollection. Recording the event ID, source, and time helps support a clear escalation rather than a guess.</p>
+
+<h2>Prepares you for</h2>
+<ul><li>Lab 04: Triage a "My PC Is So Slow" Ticket on Windows 11 — filtering recent System events while diagnosing a slow PC.</li><li>Lab 07: PC Won't Wake From Sleep After a Hardware Upgrade — using event timestamps and power-related evidence.</li></ul>
+
+<h2>Interview questions</h2>
+<details><summary>Why should you record an event's timestamp and provider as well as its ID?</summary><p>The timestamp helps correlate events with the reported issue, and the provider identifies which Windows component recorded it.</p></details>
+<details><summary>Does an error event automatically identify the root cause?</summary><p>No. It is one clue to correlate with the timeline, other events, and reproducible symptoms.</p></details>
+</body></html>
