@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lab 08: Warm-up - PowerShell Basics</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:860px;margin:0 auto;padding:1.2rem;line-height:1.6;color:#1f2937;background:#f8fafc}
+h1,h2{color:#0f3d75}h2{border-bottom:2px solid #cbd5e1;padding-bottom:.2rem;margin-top:2rem}
+.tag{display:inline-block;background:#e0ecff;color:#0f3d75;border-radius:999px;padding:.1rem .7rem;font-size:.85rem;margin-right:.3rem}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin:1rem 0}.warn{border-left:5px solid #dc2626;background:#fef2f2}
+pre{background:#0d1117;color:#e6edf3;padding:1rem;border-radius:8px;overflow-x:auto}code{font-family:Consolas,Menlo,monospace}
+</style></head><body>
+<h1>Lab 08: Warm-up - PowerShell Basics</h1>
+<p><span class="tag">Warm-up</span><span class="tag">PowerShell</span><span class="tag">Help Desk</span><span class="tag">⏱ 10–15 min</span></p>
+<div class="card warn"><strong>Safe practice:</strong> Use your own Windows computer or a disposable lab VM. These commands only inspect information and create a small file in your temporary folder; do not run practice commands on a production server.</div>
+
+<h2>Skill &amp; Scenario</h2>
+<p>A teammate asks you to gather a few PC facts and save a short note. Practice moving around PowerShell, getting help, and selecting useful command output without changing system settings.</p>
+
+<h2>Time Estimate</h2><p>10–15 minutes.</p>
+
+<h2>Prerequisites</h2>
+<ul><li>Windows 10 or 11 with Windows PowerShell or PowerShell 7.</li><li>No administrator rights or extra modules are needed.</li></ul>
+
+<h2>Steps</h2>
+<div class="card step"><label><input type="checkbox">1. Check where you are and list the files there.</label>
+<pre><code>Get-Location
+Get-ChildItem | Select-Object -First 5 Name, Length</code></pre>
+<p>Expect a folder path followed by up to five names and file sizes.</p></div>
+<div class="card step"><label><input type="checkbox">2. Ask PowerShell what a command does.</label>
+<pre><code>Get-Help Get-ChildItem -Examples</code></pre>
+<p>If local help is not installed, PowerShell will say so; the command itself is still safe.</p></div>
+<div class="card step"><label><input type="checkbox">3. Save a couple of facts in variables and select only the fields you need.</label>
+<pre><code>$computer = $env:COMPUTERNAME
+$os = Get-CimInstance Win32_OperatingSystem
+$os | Select-Object CSName, Caption, BuildNumber
+"Computer: $computer"</code></pre>
+<p>Expect your computer name and Windows edition/build. <code>Select-Object</code> keeps the output focused.</p></div>
+<div class="card step"><label><input type="checkbox">4. Create and read a small note in your temporary folder.</label>
+<pre><code>$note = Join-Path $env:TEMP 'lab08-note.txt'
+"$computer runs $($os.Caption)" | Set-Content $note
+Get-Content $note</code></pre>
+<p>Expect one line describing your computer. The file stays in your temporary folder until cleanup.</p></div>
+
+<h2>Verify it worked</h2>
+<ul><li><code>Get-Location</code> showed your current folder.</li><li>The selected computer and operating-system details appeared.</li><li><code>Get-Content $note</code> displayed the line you saved.</li></ul>
+
+<h2>Cleanup / rollback</h2>
+<p>Remove only the note created by this exercise; the command succeeds even if you already removed it:</p>
+<pre><code>Remove-Item -LiteralPath $note -ErrorAction SilentlyContinue</code></pre>
+
+<h2>Why this matters on the job</h2>
+<p>Support staff use PowerShell to gather evidence quickly, narrow noisy output to the fields that matter, and record findings without making unnecessary changes.</p>
+
+<h2>Prepares you for</h2>
+<ul><li>Lab 01: Active Directory User Onboarding with PowerShell — command help, variables, and readable output.</li><li>Lab 02: Entra ID User Lifecycle with Microsoft Graph PowerShell — command-line habits and selecting properties.</li><li>Lab 05: Build a Help Desk PC Info Tool in PowerShell — variables, system information, and saving output.</li></ul>
+
+<h2>Interview questions</h2>
+<details><summary>Why use Select-Object when gathering system information?</summary><p>It keeps output focused on the properties needed for the ticket, making results easier to read and share.</p></details>
+<details><summary>How can you learn the parameters for an unfamiliar PowerShell command?</summary><p>Use Get-Help with the command name, and use its examples to see common patterns.</p></details>
+</body></html>

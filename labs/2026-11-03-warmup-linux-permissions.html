@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lab 12: Warm-up - Linux Files and Permissions</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:860px;margin:0 auto;padding:1.2rem;line-height:1.6;color:#1f2937;background:#f8fafc}
+h1,h2{color:#0f3d75}h2{border-bottom:2px solid #cbd5e1;padding-bottom:.2rem;margin-top:2rem}
+.tag{display:inline-block;background:#e0ecff;color:#0f3d75;border-radius:999px;padding:.1rem .7rem;font-size:.85rem;margin-right:.3rem}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin:1rem 0}.warn{border-left:5px solid #dc2626;background:#fef2f2}
+pre{background:#0d1117;color:#e6edf3;padding:1rem;border-radius:8px;overflow-x:auto}code{font-family:Consolas,Menlo,monospace}
+</style></head><body>
+<h1>Lab 12: Warm-up - Linux Files and Permissions</h1>
+<p><span class="tag">Warm-up</span><span class="tag">Linux</span><span class="tag">Permissions</span><span class="tag">⏱ 10–15 min</span></p>
+<div class="card warn"><strong>Safe practice:</strong> Run this in a disposable Linux VM or container as a regular user. It creates a private temporary directory and file only. Do not use sudo, edit system files, or change permissions outside that directory. Check the directory path before cleanup.</div>
+
+<h2>Skill &amp; Scenario</h2>
+<p>A teammate cannot read a shared file. Practice checking your identity, group membership, and file mode bits, then make a controlled permission change to a temporary file and verify the result.</p>
+
+<h2>Time Estimate</h2><p>10–15 minutes.</p>
+
+<h2>Prerequisites</h2>
+<ul><li>A Linux shell, such as Ubuntu in a disposable VM or container.</li><li>Basic command-line access as a regular user; no root or sudo access is needed.</li></ul>
+
+<h2>Steps</h2>
+<div class="card step"><label><input type="checkbox">1. Confirm your user, groups, and current directory.</label>
+<pre><code>id
+groups
+pwd</code></pre>
+<p>Expect your numeric user/group IDs, group names, and current working directory.</p></div>
+<div class="card step"><label><input type="checkbox">2. Create a temporary practice directory and file.</label>
+<pre><code>LAB_DIR=$(mktemp -d)
+printf 'practice file\n' > "$LAB_DIR/notes.txt"
+printf 'Temporary directory: %s\n' "$LAB_DIR"
+ls -la "$LAB_DIR"</code></pre>
+<p>Keep this shell open so <code>LAB_DIR</code> remains set. The file is inside a newly created temporary directory.</p></div>
+<div class="card step"><label><input type="checkbox">3. Read the file's owner, group, and permissions.</label>
+<pre><code>stat -c '%A %a %U:%G %n' "$LAB_DIR/notes.txt"
+ls -ld "$LAB_DIR"</code></pre>
+<p>Expect a permission string such as <code>-rw-------</code>, an octal mode, and the owner/group.</p></div>
+<div class="card step"><label><input type="checkbox">4. Restrict the practice file to its owner and verify.</label>
+<pre><code>chmod 600 "$LAB_DIR/notes.txt"
+stat -c '%A %a %U:%G %n' "$LAB_DIR/notes.txt"
+cat "$LAB_DIR/notes.txt"</code></pre>
+<p>The mode should now be <code>-rw-------</code> (600), and the owner can still read the practice text.</p></div>
+
+<h2>Verify it worked</h2>
+<ul><li><code>id</code> showed your current account and groups.</li><li><code>stat</code> displayed the file owner and mode.</li><li>After <code>chmod 600</code>, only the file owner has read/write permission; the owner can still read it.</li></ul>
+
+<h2>Cleanup / rollback</h2>
+<p>Confirm that <code>LAB_DIR</code> is the temporary path printed in Step 2 before running cleanup. This removes only the directory created for this exercise:</p>
+<pre><code>printf 'Removing: %s\n' "$LAB_DIR"
+rm -r -- "$LAB_DIR"
+unset LAB_DIR</code></pre>
+
+<h2>Why this matters on the job</h2>
+<p>Checking ownership and permissions before changing them helps diagnose access issues while avoiding broad, unsafe permission changes.</p>
+
+<h2>Prepares you for</h2>
+<ul><li>Lab 06: Linux Users, Shared Folders &amp; Least-Privilege sudo — reading user/group information and understanding Linux permission modes.</li></ul>
+
+<h2>Interview questions</h2>
+<details><summary>What does a mode of 600 allow?</summary><p>The file owner can read and write it; the group and other users have no permissions.</p></details>
+<details><summary>Why inspect ownership and permissions before changing them?</summary><p>It identifies the access problem and helps avoid granting more access than necessary.</p></details>
+</body></html>

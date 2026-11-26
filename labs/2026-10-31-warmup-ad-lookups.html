@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lab 09: Warm-up - Read-Only Active Directory Lookups</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:860px;margin:0 auto;padding:1.2rem;line-height:1.6;color:#1f2937;background:#f8fafc}
+h1,h2{color:#0f3d75}h2{border-bottom:2px solid #cbd5e1;padding-bottom:.2rem;margin-top:2rem}
+.tag{display:inline-block;background:#e0ecff;color:#0f3d75;border-radius:999px;padding:.1rem .7rem;font-size:.85rem;margin-right:.3rem}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin:1rem 0}.warn{border-left:5px solid #dc2626;background:#fef2f2}
+pre{background:#0d1117;color:#e6edf3;padding:1rem;border-radius:8px;overflow-x:auto}code{font-family:Consolas,Menlo,monospace}
+</style></head><body>
+<h1>Lab 09: Warm-up - Read-Only Active Directory Lookups</h1>
+<p><span class="tag">Warm-up</span><span class="tag">Active Directory</span><span class="tag">PowerShell</span><span class="tag">⏱ 10–15 min</span></p>
+<div class="card warn"><strong>Safe practice:</strong> Run these read-only commands only in an isolated practice domain where you have permission. Do not query an employer or production directory. No account or group is created or changed.</div>
+
+<h2>Skill &amp; Scenario</h2>
+<p>A caller asks whether a practice account exists and which groups it belongs to. Learn the read-only Active Directory queries used to verify identity and access before taking action.</p>
+
+<h2>Time Estimate</h2><p>10–15 minutes.</p>
+
+<h2>Prerequisites</h2>
+<ul><li>An isolated <code>lab.local</code> domain from Lab 01, or another disposable practice domain.</li><li>PowerShell on a domain controller or a domain-joined computer with RSAT and the ActiveDirectory module.</li><li>At least one practice user and group to inspect.</li></ul>
+
+<h2>Steps</h2>
+<div class="card step"><label><input type="checkbox">1. Load the Active Directory module and confirm which domain is connected.</label>
+<pre><code>Import-Module ActiveDirectory
+Get-ADDomain | Select-Object DNSRoot, NetBIOSName</code></pre>
+<p>Expect the DNS and short names of your practice domain (for example, <code>lab.local</code> and <code>LAB</code>).</p></div>
+<div class="card step"><label><input type="checkbox">2. Search for a practice user by part of their name.</label>
+<pre><code>Get-ADUser -Filter 'Name -like "*Taylor*"' |
+  Select-Object Name, SamAccountName, Enabled</code></pre>
+<p>If you completed Lab 01, the result should include Taylor Reed. Otherwise use a name that exists in your lab.</p></div>
+<div class="card step"><label><input type="checkbox">3. Inspect the user's group membership without changing it.</label>
+<pre><code>Get-ADPrincipalGroupMembership -Identity treed |
+  Select-Object Name, GroupScope, GroupCategory</code></pre>
+<p>Replace <code>treed</code> with the practice user's SamAccountName. Expect the groups assigned to that user.</p></div>
+<div class="card step"><label><input type="checkbox">4. Look up one group and list its members.</label>
+<pre><code>Get-ADGroup -Filter 'Name -like "*Marketing*"' |
+  Select-Object Name, GroupScope, GroupCategory
+Get-ADGroupMember -Identity GG_Marketing_Share_RW |
+  Select-Object Name, SamAccountName, objectClass</code></pre>
+<p>Use a group that exists in your lab if the example Marketing group is not present.</p></div>
+
+<h2>Verify it worked</h2>
+<ul><li>The domain name matched your practice environment.</li><li>The user query returned a name and account status (or clearly returned no matches).</li><li>The group lookup listed members and did not change directory data.</li></ul>
+
+<h2>Cleanup / rollback</h2>
+<p>No cleanup is needed: all commands in this warm-up only read directory information.</p>
+
+<h2>Why this matters on the job</h2>
+<p>Confirming the exact account and group membership before changing access helps prevent mistaken resets, duplicate accounts, and over-broad permissions.</p>
+
+<h2>Prepares you for</h2>
+<ul><li>Lab 01: Active Directory User Onboarding with PowerShell — checking users, groups, account status, and membership.</li><li>Lab 02: Entra ID User Lifecycle with Microsoft Graph PowerShell — validating identity and group membership in a cloud directory.</li></ul>
+
+<h2>Interview questions</h2>
+<details><summary>Why should you verify a user's identity before changing their account?</summary><p>It reduces the risk of making a sensitive change to the wrong account and supports the organization's identity-verification process.</p></details>
+<details><summary>What is the difference between looking up group membership and changing it?</summary><p>A lookup gathers evidence; adding or removing membership changes access and requires authorization and verification.</p></details>
+</body></html>

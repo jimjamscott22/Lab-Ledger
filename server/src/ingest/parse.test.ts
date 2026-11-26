@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { parseLabHtml, LAB_FILE_RE, titleFromSlug } from './parse';
 import { FIXTURES } from '../testing';
 
 const read = (dir: string, f: string) => fs.readFileSync(path.join(FIXTURES, dir, f), 'utf8');
+const CANONICAL_LABS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../labs');
 
 const EXPECTED = [
   { file: '2026-10-23-ad-user-onboarding.html', n: 1, title: 'AD User Onboarding', steps: 9, time: { low: 45, high: 60 } },
@@ -85,6 +87,24 @@ describe('parseLabHtml', () => {
 
   it('title-cases slugs', () => {
     expect(titleFromSlug('windows-wont-wake')).toBe('Windows Wont Wake');
+  });
+
+  it.each([
+    '2026-10-30-warmup-powershell-basics.html',
+    '2026-10-31-warmup-ad-lookups.html',
+    '2026-11-01-warmup-windows-device-inventory.html',
+    '2026-11-02-warmup-windows-event-logs.html',
+    '2026-11-03-warmup-linux-permissions.html',
+  ])('parses canonical warm-up %s with prep and job guidance', (file) => {
+    const html = fs.readFileSync(path.join(CANONICAL_LABS, file), 'utf8');
+    const lab = parseLabHtml(html, file);
+    expect(lab.parseStatus).toBe('ok');
+    expect(lab.tags).toContain('Warm-up');
+    expect(lab.timeEstimateMin).toEqual({ low: 10, high: 15 });
+    expect(lab.steps.length).toBeGreaterThan(0);
+    expect(html).toContain('Prepares you for');
+    expect(html).toContain('Why this matters on the job');
+    expect(lab.sections.map((section) => section.kind)).toContain('verify');
   });
 });
 

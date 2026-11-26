@@ -5,3 +5,8 @@
 2026-10-27 | Lab 05 | PowerShell PC inventory tool | powershell-pc-inventory-tool
 2026-10-28 | Lab 06 | Linux users, permissions, and least-privilege sudo | linux-users-perms-sudo
 2026-10-29 | Lab 07 | Windows troubleshooting, real-world | windows-wont-wake-from-sleep
+2026-10-30 | Lab 08 | Warm-up: PowerShell basics | warmup-powershell-basics
+2026-10-31 | Lab 09 | Warm-up: Active Directory lookups | warmup-ad-lookups
+2026-11-01 | Lab 10 | Warm-up: Windows device and network inventory | warmup-windows-device-inventory
+2026-11-02 | Lab 11 | Warm-up: Windows event logs | warmup-windows-event-logs
+2026-11-03 | Lab 12 | Warm-up: Linux files and permissions | warmup-linux-permissions

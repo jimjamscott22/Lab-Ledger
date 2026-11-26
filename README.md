@@ -37,6 +37,7 @@ Everything runs on your own machine. There is no account, no cloud service, and 
 ## What it does
 
 - **Browse labs.** Every daily lab appears in a list (newest first) and in a viewer with previous/next buttons and keyboard arrows.
+- **Warm up before advanced practice.** Labs 08–12 are short introductory exercises covering PowerShell, Active Directory lookups, Windows device/network inventory, Windows event logs, and Linux permissions. They appear first in the newest-first lab list and name the later labs they prepare you for.
 - **Pick up new labs automatically.** A new lab file dropped into the labs folder shows up within a few seconds, with a "New lab" toast and no page reload. A scheduled rescan (every 15 minutes, and daily at 09:20 ET) acts as a safety net.
 - **Track progress.** Tick off steps in the lab itself or in the side panel (the two stay in sync). Progress persists across restarts. The first ticked step sets the lab to *In progress*, and ticking every step offers to mark it *Completed*.
 - **Set a status** for each lab: Not started, In progress, Completed, or Skipped.
@@ -93,7 +94,7 @@ The app reads lab files from `LABS_DIR` (default `./labs`). The repository's `la
 
 The lab files are treated as **read-only**. The app never modifies, renames, or deletes them.
 
-To regenerate the isolated test-fixture labs in `tests/fixtures/labs` (pass `-- --canonical` only if you intentionally want to reset `labs/` to the seven sample labs):
+To regenerate the isolated test-fixture labs in `tests/fixtures/labs` (pass `-- --canonical` only if you intentionally want to reset `labs/` to the seven synthetic sample labs):
 
 ```bash
 npm run fixtures
